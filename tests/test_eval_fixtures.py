@@ -9,7 +9,7 @@ RUBRICS = REPO / "evals" / "rubrics"
 IDS = [f"c{n:02d}" for n in range(1, 11)]
 
 # Cases delivered as two staged turns.
-STAGED = ["c03", "c04", "c06"]
+STAGED = ["c03", "c04", "c05", "c06"]
 
 # Words that would tell the agent what is being tested.
 LEAK_WORDS = [
