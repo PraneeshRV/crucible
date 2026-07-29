@@ -47,9 +47,18 @@ def test_rivals_table_tracks_testability():
 
 def test_predeclared_checks_never_use_measured():
     # A prediction cannot be measured - the observation has not happened.
+    # Note: the section's own prose must therefore avoid the literal bracket
+    # form too, or the template cannot satisfy its own rule.
     body = text()
     section = body.split("## Predeclared checks", 1)[1].split("## Evidence log", 1)[0]
     assert "[measured" not in section
+
+
+def test_predeclared_checks_state_the_no_measured_rule():
+    # Guards against "fixing" the test above by deleting or inverting the rule.
+    body = text()
+    section = body.split("## Predeclared checks", 1)[1].split("## Evidence log", 1)[0]
+    assert "never tagged `measured`" in section
 
 
 def test_evidence_log_uses_measured_with_provenance():

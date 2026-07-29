@@ -20,7 +20,8 @@ blocked_if: <condition>
 
 ## Predeclared checks
 
-Written *before* observing. A predicted transition is never `[documented: <source>]`.
+Written *before* observing, so a predicted transition is never tagged `measured` — the
+observation has not happened yet.
 
 | Check | Outcome | H1 | H2 | H3 | Cost/Risk/Rev | Changes action? |
 |---|---|---|---|---|---|---|
