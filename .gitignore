@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+evals/workspace/
+evals/results/*.local.md
