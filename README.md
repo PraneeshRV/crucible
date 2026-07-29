@@ -2,7 +2,8 @@
 
 A falsification gate for AI agents.
 
-Crucible does not investigate. It intercepts the moment an agent is about to commit to a
+Crucible does not replace domain investigation — it governs the investigation the enclosing
+agent is already doing. It intercepts the moment that agent is about to commit to a
 conclusion that is expensive to get wrong, and forces it to construct a rival explanation,
 predeclare what each possible outcome would mean, run the check most likely to change the
 decision, update every rival rather than the favoured one, and resolve into an explicit
@@ -22,8 +23,23 @@ ln -s ~/Praneesh/crucible/skill/crucible ~/.agents/skills/crucible
 
 ## Status
 
-Pre-release. Gate 1 (pilot) evidence only — see `evals/results/`. Not yet validated at the
-Gate 2 threshold required for release.
+Pre-release, and **no behavioural evidence has been collected yet**.
+
+The implementation is structurally complete and tested — 88 tests cover the skill's
+structure, the case template's rules, the Codex manifest, and the eval harness's isolation
+of hidden rubrics. None of that measures whether Crucible changes how an agent reasons.
+
+| | State |
+|---|---|
+| Structural implementation | Established |
+| Behavioural effectiveness | **Untested** |
+| Terminal state | `underdetermined` |
+
+Next: Gate 1 (12 pilot runs, bare vs implicit) — enough to begin dogfooding, not proof.
+Release additionally requires dogfooding, regression growth from real misfires, and Gate 2
+(144 runs across both harnesses, every case at its predeclared threshold).
+
+`evals/results/` is empty until Gate 1 runs.
 
 ## Design
 
