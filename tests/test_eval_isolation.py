@@ -35,9 +35,12 @@ def test_prompt_and_artifacts_are_materialized(fake_case, tmp_path):
     assert (out / "artifacts" / "build.log").exists()
 
 
-def test_turn2_materialized_when_present(fake_case, tmp_path):
+def test_turn2_is_staged_outside_the_workspace(fake_case, tmp_path):
+    # A staged turn is the evidence the session is supposed to be predicting. If it sits
+    # in the working directory, the session can read ahead and the prediction is worthless.
     out = materialize("c01", tmp_path / "workspace")
-    assert (out / "turn2.md").read_text().startswith("Here is the result")
+    assert not (out / "turn2.md").exists()
+    assert (out.parent / "turn2.md").read_text().startswith("Here is the result")
 
 
 @pytest.mark.parametrize(
