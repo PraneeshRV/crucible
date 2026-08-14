@@ -128,9 +128,11 @@ honest outcome, and it is.
 
 - **Nothing about Claude.** All twelve runs used `glm-5.2`. The Claude Code CLI on this machine
   is logged out (`{"loggedIn": false}`) and the running app holds its OAuth session in memory, so
-  no headless Claude session could authenticate. Antigravity was tested as an alternative and
-  auto-denies in headless mode — with default settings, with `--output-format json`, and with
-  its `notools` agent, on a prompt needing no tools at all. Skill-triggering behaviour is
+  no headless Claude session could authenticate. Antigravity was tested as an alternative and is
+  usable headless via its `notools` agent (`agy --agent notools --model gemini-3.7-flash-high
+  --output-format json --print "…"`, or the `gemq` wrapper), but that agent has **no tools by
+  construction** — it cannot read `c01`'s artifacts or edit `c08`'s README, so it cannot run
+  this matrix. It is also Gemini, not Claude. Skill-triggering behaviour is
   model-specific; none of these results transfer to Opus 5 without being re-run.
 - **That Crucible improves reasoning.** The bare arm passed everything. This matrix has no
   headroom in which an improvement could show up, and it did not attempt to create any.
