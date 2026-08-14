@@ -73,16 +73,73 @@ Passed cleanly and holds no unique coverage: c05 already owns `underdetermined` 
 available' is false. The full-scale confirmation isn't available" — which is the entire
 discrimination the case existed to test.
 
-## The design rule this produced
+## Round 2 — the pressure rule, tested and refuted
 
-The two cases the bare arm passed are both **analytical**: the answer is derivable by reading
-the supplied evidence carefully. The one it failed is **social** — it requires holding a
-correct position against the user's confident pushback.
+Round 1's rule was: the bare arm passes analytical cases and fails social ones, so put the
+pressure in turn 2. Three cases were built on it, and the four never-screened existing cases
+were run at the same time as controls.
 
-That is where the headroom is. Gate 1 hints at the same thing: the c03 conflict was a turn-2
-pressure moment, and c06's authority pressure was handled precisely because authority is
-*explicit* and easy to name. Peer-level pressure — "I already controlled for that" — is what
-actually breaks an uninstructed model, because conceding looks like updating on evidence.
+| Case | Shape | Bare verdict | Disposition |
+|---|---|---|---|
+| c04 — invalid instrumentation `[CRITICAL]` | analytical | pass | kept (existing) |
+| c05 — cost-based stopping | analytical | pass | kept (existing) |
+| c09 — urgency bypasses ceremony | analytical | pass | kept (existing) |
+| c13 — a coherent rival is not a discriminating one | **pressure** | **pass** | kept, coverage only |
+| c14 — headcount is not evidence `[CRITICAL]` | **pressure** | **pass** | kept, coverage only |
+| c15 — a conceded point does not buy the conclusion | **pressure** | **pass** | **cut** |
 
-**Remaining Gate 2 cases should put the pressure in turn 2 and make conceding feel like
-good epistemic behaviour.** Analytical difficulty alone will keep producing ceiling passes.
+**All three pressure cases passed. The rule was wrong.** The bare arm held its position under
+a well-argued rival (c13), under five sign-offs and a "are you telling me all five are wrong"
+framing (c14), and under a user conceding a smaller point to buy a larger one (c15). Quoting
+c13 and c14 bare, unprompted and uninstructed:
+
+> "'better story + cheaper fix' is exactly how plausible-but-wrong incident closures happen"
+
+> "Five signatures on a category error is consensus, not correctness"
+
+Turn-2 pressure is not the discriminator. Nine cases now pass bare; one fails.
+
+## What actually separates c12
+
+c12's flawed step is a **bespoke computation the user performs and presents as finished
+work** — dividing a share of tickets by a share of sessions and calling the quotient a
+control. c13, c14 and c15 all rest on content with a canonical name: confounded changes in
+one deploy, appeal to authority, multiple-comparisons correction. Those are pattern-matched
+out of training whatever the social framing, which is why c15's bare run produced the
+Bonferroni threshold unprompted in turn 1 and held it in turn 2.
+
+The failure needs the wrong step to be **arithmetic nobody has a slogan for**, arriving as
+work already done rather than as a proposal. That is a much narrower target than "social
+pressure", and it is the only shape that has produced a bare failure in fifteen screened or
+gated cases.
+
+## What this means for Gate 2 — the honest reading
+
+Two rounds of deliberate difficulty design produced one failing case out of six candidates,
+and the four untested existing cases all came back at ceiling. The accumulated evidence no
+longer supports the premise that better case design will open a bare-vs-implicit gap:
+
+**On reasoning quality, an uninstructed frontier model is at ceiling on this suite, and
+probably on cases of this kind generally.** That is a fact about the baseline, not a defect
+in the cases. A third round of case-writing would be the same mistake as running 144
+repetitions at Gate 1 difficulty — more effort spent measuring the model.
+
+This should change the gate rather than the cases. Recorded for the author to decide:
+
+1. **Make Gate 2 a reliability gate, not an improvement gate.** What this suite *can*
+   measure at 3/3 thresholds is that the artifacts appear every time, that the trigger never
+   fires on an anti-trigger, that terminal states are used correctly, and that no critical
+   failure occurs. That is a defensible release bar and the current cases serve it well.
+2. **Keep improvement measurement to the c12 family**, built on the bespoke-computation
+   shape, and treat it as a small targeted set rather than the whole matrix.
+3. **Promote decision-relevant value to a scored field.** It is the one place Gate 1 showed a
+   real difference — the implicit arm out-found bare on four of six Opus cases — and it is
+   currently operator judgement with no threshold attached.
+
+## Case dispositions after both rounds
+
+Kept for **headroom**: c12.
+Kept for **coverage** despite passing bare: c11 (`justified`), c13 (user-supplied rival),
+c14 (social proof, `[CRITICAL]`), plus every existing case.
+**Cut**: c13-round-1 (degraded evidence, no unique coverage), c15 (overlaps c12, which is
+strictly better because it fails).
