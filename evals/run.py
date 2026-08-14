@@ -45,7 +45,10 @@ CONDITIONS = {
 }
 
 
-def build_home(root: Path, install_skill: bool) -> Path:
+REAL_CREDENTIALS = Path.home() / ".claude" / ".credentials.json"
+
+
+def build_home(root: Path, install_skill: bool, link_credentials: bool = False) -> Path:
     """A disposable HOME. Empty means no user CLAUDE.md, no skills, no plugins, no hooks."""
     home = root / ("home-skill" if install_skill else "home-bare")
     if home.exists():
@@ -53,16 +56,26 @@ def build_home(root: Path, install_skill: bool) -> Path:
     (home / ".claude" / "skills").mkdir(parents=True)
     if install_skill:
         shutil.copytree(SKILL_SRC, home / ".claude" / "skills" / "crucible")
+    if link_credentials:
+        # The `claude` harness authenticates from $HOME/.claude/.credentials.json, which a
+        # disposable HOME does not have. Symlink, never copy: the token stays in one place
+        # and no secret is written into an eval directory. Note that an eval session with
+        # Bash can read through this link, so the harness trades that exposure for a clean
+        # HOME. Acceptable for first-party cases; revisit before running untrusted prompts.
+        (home / ".claude" / ".credentials.json").symlink_to(REAL_CREDENTIALS)
     return home
 
 
 def harness_cmd(harness: str, model: str, prompt: str, session: list[str], deny: list[str]) -> list[str]:
     if harness in ("glm", "claude"):
         cmd = [harness, "-p", prompt, *session]
+        # glm selects its model through the wrapper's env; claude needs the flag.
+        if harness == "claude":
+            cmd += ["--model", model]
         if deny:
             cmd += ["--disallowedTools", ",".join(deny)]
         return cmd
-    raise ValueError(f"unsupported harness: {harness!r} (codex support pending a CLI on PATH)")
+    raise ValueError(f"unsupported harness: {harness!r}")
 
 
 def run_cell(case_id: str, condition: str, rep: int, cfg: dict, outdir: Path, workroot: Path) -> str:
@@ -77,10 +90,15 @@ def run_cell(case_id: str, condition: str, rep: int, cfg: dict, outdir: Path, wo
     work = materialize(case_id, ws)
     staged_turn2 = work.parent / "turn2.md"
 
-    home = build_home(ws, spec["install_skill"])
+    home = build_home(ws, spec["install_skill"], link_credentials=cfg["harness"] == "claude")
     env = dict(os.environ)
     env["HOME"] = str(home)
     env.setdefault("ZAI_KEY_FILE", str(Path.home() / ".config" / "zai.key"))
+    if cfg["harness"] == "claude":
+        # The parent is a Claude session; its OAuth plumbing would otherwise be inherited
+        # by the child and override the disposable HOME.
+        for var in [k for k in env if k.startswith(("CLAUDE_", "ANTHROPIC_"))]:
+            del env[var]
 
     deny = ["Task", "Agent"] + (
         ["Skill"] if spec["deny_skill_tool"] else [f"Skill({s})" for s in BUILTIN_SKILLS]
@@ -122,7 +140,7 @@ def run_cell(case_id: str, condition: str, rep: int, cfg: dict, outdir: Path, wo
         body += [f"## turn {n} prompt", "", prompt, "", f"## turn {n} response", "", response, ""]
     body += ["## verdict", "", "_ungraded — open the rubric only after the run completes_", ""]
     out.write_text("\n".join(body))
-    return f"done {out.name} ({sum(elapsed)}s)"
+    return f"done {out.name} ({round(sum(elapsed), 1)}s)"
 
 
 def main() -> None:
