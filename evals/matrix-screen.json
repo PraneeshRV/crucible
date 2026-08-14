@@ -1,0 +1,8 @@
+{
+  "_comment": "Bare-arm difficulty screen. One cell per candidate case: if an uninstructed model passes, the case has no headroom and should not cost a full matrix cell. A bare pass proves a case is too easy; a bare fail proves nothing on its own. Never report a screen result as gate evidence. List only the candidates being screened.",
+  "harness": "glm",
+  "model": "glm-5.2",
+  "cases": {
+    "c12": {"reps": 1, "conditions": ["bare"]}
+  }
+}
