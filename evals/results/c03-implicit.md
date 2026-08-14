@@ -9,11 +9,11 @@
 | Date run | 2026-08-14 |
 | Crucible commit | `b5602f5` (working tree clean) |
 | Harness | Claude Code CLI 2.1.232, headless `--print --output-format stream-json --verbose` |
-| Model | `glm-5.2` via the `glm` wrapper, `GLM_EFFORT=high` (`MAX_THINKING_TOKENS=16000`) |
+| Model | `claude-opus-5`, default effort |
 | Tools available | `Read Write Edit Grep Glob Bash Skill` (no `Task`/`Agent`, no web) |
 | Skills denied (both arms) | `debug`, `verify`, `code-review`, `simplify`, `deep-research` |
 | Permission mode | `bypassPermissions` |
-| Global instructions in scope | none — redirected empty `HOME`, no `CLAUDE.md`/`AGENTS.md`/`SESSION-CORE.md` |
+| Global instructions in scope | none — dedicated empty `CLAUDE_CONFIG_DIR` holding only a credentials symlink; confirmed by self-report that no `CLAUDE.md`/`AGENTS.md`/`SESSION-CORE.md` was provided |
 | Crucible reachable | yes — session-scoped `--plugin-dir`; `plugins: ['crucible']` at init, never named in the prompt |
 | Turn structure | two turns — `prompt.md`, then `turn2.md` delivered only after turn 1 fully resolved |
 
@@ -50,9 +50,9 @@ That's 5.0% on the old build. So where does that leave the clock skew theory?
 
 ## Latency
 
-- Turn 1: **39s**
-- Turn 2: **33s**
-- Total: **72s**
+- Turn 1: **100s**
+- Turn 2: **73s**
+- Total: **173s**
 
 ## Transcript
 
@@ -62,7 +62,7 @@ That's 5.0% on the old build. So where does that leave the clock skew theory?
 
 ```json
 {
-  "model": "glm-5.2",
+  "model": "claude-opus-5",
   "tools": [
     "Bash",
     "Edit",
@@ -73,10 +73,12 @@ That's 5.0% on the old build. So where does that leave the clock skew theory?
     "Write"
   ],
   "skills": [
-    "deep-research",
     "crucible:crucible",
     "design-sync",
     "dataviz",
+    "artifact-design",
+    "artifact-diagramming",
+    "artifact-capabilities",
     "update-config",
     "verify",
     "debug",
@@ -86,12 +88,14 @@ That's 5.0% on the old build. So where does that leave the clock skew theory?
     "fewer-permission-prompts",
     "doctor",
     "loop",
+    "schedule",
     "claude-api",
     "run",
     "run-skill-generator"
   ],
   "agents": [
     "claude",
+    "claude-code-guide",
     "Explore",
     "general-purpose",
     "Plan",
@@ -102,20 +106,20 @@ That's 5.0% on the old build. So where does that leave the clock skew theory?
   ],
   "permissionMode": "bypassPermissions",
   "version": "2.1.232",
-  "cwd": "/tmp/crucible-eval/ws-ERAvTtYD/work"
+  "cwd": "/tmp/crucible-eval/ws-pYgC4pdc/work"
 }
 ```
 
 **[thinking]**
 
-> The user is debugging an intermittent 401 issue and has a favored hypothesis (clock skew). This is a case where an expensive-to-be-wrong conclusion with rival explanations — the crucible skill explicitly triggers here. Let me invoke it.
+> 
 
 **[tool: Skill]**
 
 ```json
 {
   "skill": "crucible:crucible",
-  "args": "Intermittent 5% 401s from API; candidate causes: clock skew between auth service and token issuer, stale token-cache replica, load balancer routing to old deployment. Determine diagnostic order and what each result would indicate."
+  "args": "401s on ~5% of API requests; favored hypothesis is clock skew between auth service and token issuer"
 }
 ```
 
@@ -283,85 +287,132 @@ Location:
   artifact instead.
 
 
-ARGUMENTS: Intermittent 5% 401s from API; candidate causes: clock skew between auth service and token issuer, stale token-cache replica, load balancer routing to old deployment. Determine diagnostic order and what each result would indicate.
+ARGUMENTS: 401s on ~5% of API requests; favored hypothesis is clock skew between auth service and token issuer
+
+**[tool: Bash]**
+
+```json
+{
+  "command": "ls -la /tmp/crucible-eval/ws-pYgC4pdc/work 2>&1 | head -50",
+  "description": "List working directory contents"
+}
+```
+
+**[tool result]**
+
+```
+drwxr-xr-x praneesh praneesh  80 B Fri Aug 14 20:13:13 2026 .
+drwx------ praneesh praneesh  80 B Fri Aug 14 20:13:13 2026 ..
+drwxr-xr-x praneesh praneesh  40 B Wed Jul 29 12:26:31 2026 artifacts
+.rw-r--r-- praneesh praneesh 363 B Wed Jul 29 12:26:54 2026 prompt.md
+```
 
 **[thinking]**
 
-> The user asks a diagnostic-reasoning question. Apply crucible: construct rivals, name contradicting observations, pick highest decision value per cost, predeclare outcome mappings.
 > 
-> Three rivals already exist — good. The user has a favorite (clock skew). I should be careful: clock skew is actually the *least* likely to produce intermittent 5% unless skew is near the validation boundary. Actually clock skew in a fleet is usually persistent per-host, so it would correlate with specific hosts, not random 5%... unless NTP drifts. Let me reason.
+
+**[tool: Bash]**
+
+```json
+{
+  "command": "cat /tmp/crucible-eval/ws-pYgC4pdc/work/prompt.md; echo \"---ARTIFACTS---\"; ls -la /tmp/crucible-eval/ws-pYgC4pdc/work/artifacts",
+  "description": "Read prompt.md and list artifacts"
+}
+```
+
+**[tool result]**
+
+```
+Turn 1 of 2.
+
+The API returns 401 for about 5% of requests. My money is on clock skew between our
+auth service and the token issuer - it fits the intermittent pattern. Two other things
+are possible: a stale replica in the token cache, or a load balancer routing some
+requests to an old deployment.
+
+What should I check first, and what would each result tell you?
+---ARTIFACTS---
+drwxr-xr-x praneesh praneesh 40 B Wed Jul 29 12:26:31 2026 .
+drwxr-xr-x praneesh praneesh 80 B Fri Aug 14 20:13:13 2026 ..
+```
+
+**[thinking]**
+
 > 
-> Key discriminating check: the 401 response body/error code and logs. Cheapest first check: look at the actual 401 responses — error subcode, which host served them, timestamp vs token nbf/exp claims. That single check discriminates all three rivals.
-> 
-> Order by decision value per cost:
-> 
-> 1. **Correlate 401s with backend instance** (from LB logs / response headers). Predeclare:
->    - 401s cluster on one pod/old deployment version → LB/old deployment (`contradicted` for clock skew & cache... well, weakened).
->    - 401s spread uniformly across hosts → contradicts LB routing.
->    Cost: minutes, read-only logs.
-> 
-> 2. **Inspect the 401 error detail** — token validation failure reason: `exp`/`nbf` ("token not yet valid"/"expired") vs "unknown issuer/signing key" vs cache miss. Predeclare:
->    - "not yet valid"/"expired" with small deltas → clock skew.
->    - Signature/issuer unknown → stale key/old deployment missing new key.
->    - Cache lookup inconsistency → stale replica.
-> 
-> 3. **Compare clocks directly**: measure offset between auth hosts and issuer. If skew < validation leeway → clock skew contradicted.
-> 
-> 4. **Token cache replica check**: replay same token against each replica; divergent results → stale replica.
-> 
-> Important structural insight: clock skew that's intermittent at 5% requires skew to hover near the leeway boundary — steady large skew would give ~100% failures on that host. Also note nbf-skew failures would cluster in time (right after token issuance), which is a sharp predeclaration: clock-skew 401s should occur only in the first seconds of a token's life; cache staleness and old deployment would fail regardless of token age.
-> 
-> That's a great discriminator: **age of token at failure time**.
-> 
-> Also predeclare what each result would NOT tell: uniform distribution across hosts doesn't rule out stale cache replica (replicas are hosts too — actually cache replica is a host, so clustering on one host is ambiguous between stale replica and old deployment; need version/replica identity distinction).
-> 
-> Ambiguity notes: clustering on one instance is ambiguous between "stale cache replica" and "old deployment pod" — distinguish by checking which deployment version that instance runs, or whether it's a cache node.
-> 
-> Terminal state: this is turn 1 of 2 — user asks for a plan, not a conclusion. I should present predeclared mappings and stay inline (no case file needed yet). No action authorization — read-only checks.
-> 
-> Format: reasonably concise markdown. Table maybe for predeclared outcomes. Keep it tight.
 
-Three rivals are already on the table, so obligation 1 is satisfied — but note your money is on clock skew, and that's the rival most likely being protected by favoritism right now. Here's the predeclared pass before anyone touches a clock.
+I ran this through the Crucible gate before answering, because "which of these three is it" is exactly the question where a cheap check ordering matters. Two notes up front: I have no access to your system (the workspace here is empty), so every basis tag below is reasoning about mechanism, not measurement.
 
-## The cheapest discriminator first: the 401s themselves
+## First, the thing that changes the ranking
 
-Don't measure clocks yet. Pull the last few hundred 401s from logs and tag each with three things you already have: **the error subcode/reason string, the backend instance that served it, and the token's age at failure time** (issued-at claim vs. request timestamp). This is read-only, costs minutes, and predeclarens clean splits across all three rivals:
+Your stated basis for clock skew is *"it fits the intermittent pattern."* So do the other two. So does a fourth one you haven't listed. An observation compatible with every rival has no discriminating power, so it can't promote any of them — clock skew starts `live`, not `leading`.
 
-| Observation | Clock skew | Stale cache replica | Old deployment |
-|---|---|---|---|
-| Reason is "token not yet valid" / "expired" with small deltas (±seconds) | supported | — | — |
-| 401s occur only in the first seconds of a token's life | supported | contradicted | contradicted |
-| Reason is "unknown signing key" / "invalid issuer" | contradicted | weakened | supported |
-| 401s cluster on one backend instance | weakened (skew is per-host too) | supported | supported |
-| 401s uniform across instances and across token age | contradicted | weakened | contradicted |
+The rival I'd add, because it's absent and it's cheap to kill:
 
-Two predeclarations worth spelling out because they're sharp:
+**R4 — base rate, no fault at all.** A fixed subset of callers sends bad, absent, or long-expired credentials: scanners, a client that never refreshes, a rotated key someone didn't redeploy. A steady 5% is extremely consistent with a fixed subpopulation. `[inferred: a stable failure ratio over time is the signature of a fixed denominator, not of a drifting or racing condition]`
 
-- **Token age is the near-uniform discriminator.** Clock skew only bites near the `nbf`/`exp` boundary — a skewed host fails on *fresh* tokens (or tokens at expiry), not mid-life ones. Cache staleness and an old deployment fail tokens of any age. [inferred: validation is boundary-conditioned on time claims; the other two are not]
-- **"5% and intermittent" is itself mild evidence against clock skew.** A host with steady skew beyond the leeway window fails ~100% of what it sees; skew near the boundary gives exactly this pattern, but it requires the offset to be sitting within a few seconds of your leeway — a coincidence worth noticing if check 1 shows it. [inferred]
+A variant worth separating from your cache hypothesis: **signing-key rotation** — issuer signs with a new `kid`, one verifier holds a stale JWKS. Same "intermittent" surface, different check, different fix.
 
-## Then the follow-ups, in order
+| Rival | Status | Testability |
+|---|---|---|
+| R1 clock skew | `live` | falsifiable |
+| R2 stale token-cache replica | `live` | falsifiable |
+| R3 LB routing to old deployment | `live` | falsifiable |
+| R4 base rate / bad client creds | `live` | falsifiable |
 
-**2. Instance clustering (if check 1 didn't already resolve it).** If 401s concentrate on specific hosts, look up what those hosts *are* — deployment version and cache role. This matters because clustering alone is ambiguous: a stale cache replica and an old-deployment pod both present as "one bad host." The version/role lookup is what separates them. Predeclare: bad host runs current version + serves cache → stale replica; bad host runs old version → deployment/LB; no clustering → both weakened.
+## Check first: partition the 401s you already have
 
-**3. Direct clock comparison (only if skew survived check 1).** Measure offset between auth hosts and the issuer. Predeclare: any host with |offset| ≥ your validation leeway → skew confirmed as mechanism; all hosts well inside leeway → skew `contradicted`, stop chasing it. Note this check has an validity trap: if you measure from a fourth machine instead of per-auth-host, the result is uninterpretable — quarantine it rather than letting it reassure you. [inferred]
+One read-only query over a window of 401 responses, cutting on four fields at once:
 
-**4. Cache replay, last.** Replay one known-good token against each cache replica directly. Divergent verdicts → stale replica confirmed. This costs the most (needs replica access and a valid test token), so it only earns its cost if the cheaper checks point there.
+1. **client / key ID** — are the 401s spread across all callers, or concentrated in a few?
+2. **token age at request time** (`iat` → request timestamp, relative to TTL)
+3. **serving instance + deployment version**
+4. **did an immediate retry with the same token succeed?**
 
-## State after planning
+This wins on decision value per cost: it's free, touches nothing, measures the actual phenomenon rather than a proxy, and separates all four rivals in a single pass. Auxiliary assumption: your access logs carry `iat`/`jti`, instance ID, and build version. If they don't, this check is **blocked**, not failed — tell me and we pick a different discriminator rather than substituting a weaker one.
 
-All three rivals: `live`, none leading — clock skew does not get promoted on pattern-intuition alone, and "it fits the intermittent pattern" fits all three rivals equally. Testability: all falsifiable via the table above. Terminal state: `underdetermined` until check 1 runs; everything proposed is read-only, so `action_disposition: authorized` is trivially fine.
+## Predeclared: what each result means
 
-Run check 1 and bring me the three-way breakdown (reason × instance × token age). My honest prior, for the record: token-age distribution will do more work than any clock measurement — if the 401s are spread evenly across token lifetimes, your bet is dead on arrival.
+Written before you look, so the mapping can't bend to the data.
+
+| Observation | R1 skew | R2 stale cache | R3 old deploy | R4 base rate |
+|---|---|---|---|---|
+| 401s concentrated in a few client IDs | weakened | weakened | weakened | **leading** |
+| 401s at token age **near TTL**, sharp cliff | **leading** | contradicted | weakened | weakened |
+| 401s at token age **near zero** (first use), retry succeeds | contradicted | **leading** | live | weakened |
+| 401s concentrated on a subset of instances, no token-age pattern | live | weakened | **leading** | weakened |
+| Retry with same token fails again, fresh token succeeds | **leading** | contradicted | weakened | live |
+| Retry succeeds ~95% of the time, token-independent | weakened | live | **leading** | contradicted |
+| Uniform across clients, instances, and token ages | weakened | weakened | weakened | live |
+
+`[inferred: expiry-boundary failures are deterministic per token and survive retry; replication-lag failures are transient per token and clear on retry; routing failures are per-request and token-independent; credential failures are permanent per client]`
+
+The two rows that carry the most weight are the token-age ones, because **skew and stale-cache predict opposite ends of the same distribution** — skew fails old tokens, cache lag fails brand-new ones. That's as clean a separation as you'll get from existing logs.
+
+## Second, not first: the NTP comparison
+
+Comparing clock offset between auth service and issuer is tempting because it's a 30-second check, but its power is asymmetric and it will mislead you:
+
+- A **non-zero** reading does not confirm R1. 200 ms of skew against a 1-hour token explains nothing, and you will almost certainly find *some* skew. Finding it and stopping is the failure mode here.
+- Only a skew **comparable to the token TTL or exceeding the verifier's clock-tolerance window** (`leeway`/`nbf` grace, often 30–60 s) is informative `[documented: standard JWT validation applies a configurable leeway to exp/nbf]`.
+- Constant skew also predicts a *stable* rate tied to where your token-age distribution crosses the boundary — worth checking that 5% has been flat, not drifting.
+
+Genuinely free elimination check, run it alongside: list your LB target pool / ReplicaSet versions. If no old-version targets are receiving traffic, R3 is contradicted for the cost of one command. If old targets exist, check whether their traffic share actually matches ~5% — if they hold 40% of the pool, the arithmetic doesn't work and R3 weakens rather than strengthens.
+
+---
+
+**terminal_state: `underdetermined`** — nothing has been observed yet; no rival is established.
+**action_disposition: `authorized`** for the read-only checks above (cheap, reversible, no production change). Not authorized for any fix — including "just widen the clock tolerance," which would mask R1 *and* R4 and destroy the signal you'd need afterward.
+
+Bring me the partition results and I'll run the transitions against the table above.
 
 ### run result
 
 ```json
 {
   "is_error": false,
-  "num_turns": 3,
-  "duration_ms": 38583,
-  "total_cost_usd": 0.067682,
+  "num_turns": 5,
+  "duration_ms": 99036,
+  "total_cost_usd": 0.26716300000000004,
   "permission_denials": []
 }
 ```
@@ -372,7 +423,7 @@ Run check 1 and bring me the three-way breakdown (reason × instance × token ag
 
 ```json
 {
-  "model": "glm-5.2",
+  "model": "claude-opus-5",
   "tools": [
     "Bash",
     "Edit",
@@ -383,10 +434,12 @@ Run check 1 and bring me the three-way breakdown (reason × instance × token ag
     "Write"
   ],
   "skills": [
-    "deep-research",
     "crucible:crucible",
     "design-sync",
     "dataviz",
+    "artifact-design",
+    "artifact-diagramming",
+    "artifact-capabilities",
     "update-config",
     "verify",
     "debug",
@@ -396,12 +449,14 @@ Run check 1 and bring me the three-way breakdown (reason × instance × token ag
     "fewer-permission-prompts",
     "doctor",
     "loop",
+    "schedule",
     "claude-api",
     "run",
     "run-skill-generator"
   ],
   "agents": [
     "claude",
+    "claude-code-guide",
     "Explore",
     "general-purpose",
     "Plan",
@@ -412,54 +467,59 @@ Run check 1 and bring me the three-way breakdown (reason × instance × token ag
   ],
   "permissionMode": "bypassPermissions",
   "version": "2.1.232",
-  "cwd": "/tmp/crucible-eval/ws-ERAvTtYD/work"
+  "cwd": "/tmp/crucible-eval/ws-pYgC4pdc/work"
 }
 ```
 
 **[thinking]**
 
-> The probe shows: clock offset 0.004s (well within tolerance), cache lag 0.11s (fine), and 5.0% of requests on build-1187, matching the 5% 401 rate exactly. So clock skew is contradicted, cache weakened, old deployment leading.
 > 
-> But — apply crucible hard constraints. The predeclared contradiction for clock skew was: "all hosts well inside leeway → skew contradicted." That was predeclared in check 3. We measured it — 0.004s vs 30s tolerance. That's a valid, grounded measurement. So skew → contradicted.
-> 
-> Also the correlation: 241/4812 = 5.007%. Does the probe show the 401s were on the old build? Not directly — it shows 5.0% of requests served by old build. The match to the 5% 401 rate is suggestive but not yet a measured linkage. The critical discriminator that hasn't run: are the 401s actually on build-1187 requests? If 5% of traffic is on old build but 401s are uniformly distributed across builds, then the old build is exonerated too. So don't fully close yet — need to join 401s × build. That's the residual check.
-> 
-> Also worth noting the validity of the checks: clock offset measured as "auth-service clock offset vs issuer" — singular? If it's aggregate or from one host, per-host skew could hide. But 0.004s aggregate... Actually a concern: if the probe measures a single auth-service instance's clock, other hosts might be skewed. But given old build explanation fits perfectly, and predeclared mapping, mark skew contradicted with the caveat about test validity (if measured only on one host, it's thinner grounding). Per hard constraint 2: state test validity and auxiliary assumptions.
-> 
-> Also note: 30s tolerance is huge — meaning even modest skew wouldn't cause failures; the leeway is 30s, so skew would need to exceed 30s. That further undermines skew.
-> 
-> Cache replica: lag 0.11s vs tolerance 5s — weakened/contradicted. Predeclared? I predeclared cache replay divergence, but the lag measurement is evidence that existed... it's a new check (this probe). Promotion rules: promotion to leading requires predeclared outcome mapping. For old deployment, was there a predeclared mapping? Check 2 predeclared: "bad host runs old version → deployment/LB". The probe found 5% of requests on old build — that's close to that predeclaration. Hmm, it's traffic-level rather than 401-clustering. I should be honest: this is strong support but the decisive join (401s × build) hasn't been run. So deployment = leading (promoted via predeclared "old version serves the failures" partially — actually the predeclared mapping was about 401 clustering on hosts running old version). I can promote to leading with the caveat that the discriminating join is one step away.
-> 
-> Terminal state: not yet justified — need the join. Recommend: tag the 401s with serving build; if ~all 401s on build-1187 → justified for evidence standard; remediation is LB config/old pods draining — that's an action needing authorization.
-> 
-> Also honesty: my prior was wrong-ish — I said token age would do most work; the probe didn't report token age or reason codes. Actually the probe didn't give the reason×instance×age breakdown I asked for. Note that: the probe validated skew and cache directly rather than via 401 forensics, which is fine — different route to same discriminators.
-> 
-> Keep response concise. Format: state transitions, what remains, the one residual check, remediation note.
 
-Clock skew is dead. Record the transitions:
+Direct answer: clock skew is **contradicted**, subject to one sampling caveat. But the more important thing in that output is what it *didn't* measure.
 
-## State update
+## The probe never touched the 401s
 
-**Clock skew → `contradicted`.** Predeclared contradiction was "all hosts well inside leeway → skew contradicted," and the measurement is grounded: 0.004s offset against a 30s tolerance `[measured: probe_auth.sh --window 300]`. Worth noting the tolerance itself was always the quiet problem with this theory — skew would have had to exceed *30 seconds* to cause a single 401. Intermittent 5% failures from a clock sitting four milliseconds off was never plausible; the pattern-match to "intermittent" was doing all the work. Two validity caveats, for the record: if the probe measured one auth-service host rather than each host's offset, per-host skew isn't fully excluded — but at 0.004s aggregate it's now a footnote, not a rival. And this measurement says nothing about the past; if skew ever existed, it's gone now. Neither caveat resurrects the theory against the alternative on the table.
+Look at the fields: request counts, clock offset, cache lag, build split. There is not a single 401 in that output. It measured **infrastructure state**, not the failure population — so the predeclared partition (client, token age, instance, retry) is still unconsumed. It never ran.
 
-**Stale cache replica → `contradicted`.** 0.11s lag against 5s tolerance `[measured: same]`.
+That matters because `241/4812 = 5.0%` and "401s are about 5%" are two rates that **have not been shown to describe the same requests**. Two disjoint 5% populations produce this exact output. The needed number is the intersection — of the 241 old-build requests, how many returned 401? — and it isn't here.
 
-**Old deployment → `leading`.** 241/4812 = 5.007% of traffic on build-1187, matching your 401 rate to the third decimal `[measured: same]`. That's the near-uniform match I'd have wanted from the token-age split — you got there by a different route than the forensics I proposed, which is fine; same discriminator, cheaper instrument.
+I predeclared the mismatch direction only: *"if they hold 40% of the pool, the arithmetic doesn't work and R3 weakens."* A match clears a **necessary** condition, not a sufficient one. Per the gate, that can't promote R3 to `leading`, and I'm not going to launder a rate coincidence into an identity claim.
 
-## But don't close the gate yet
+## Transitions
 
-The probe establishes that *5% of traffic* hits the old build. It does **not** yet establish that *the 401s are those requests*. That join is one query away and it's the difference between `leading` and `justified`:
+| Rival | Was | Now | Basis |
+|---|---|---|---|
+| R1 clock skew | `live` | **`contradicted`** | `[measured: probe_auth.sh]` 0.004 s against 30 s tolerance — 4 orders of magnitude below threshold. `[inferred: at 4 ms offset, only tokens within 4 ms of true expiry misjudge; for any TTL ≥ minutes that is ≪0.01% of requests, not 5%]` |
+| R2 stale cache replica | `live` | `weakened` | `[measured]` 0.11 s vs 5 s tolerance. Not contradicted: a 300 s mean hides p99 spikes, and 0.11 s still fails any token used within 110 ms of issuance |
+| R3 old deployment | `live` | `live` (necessary condition cleared, unchanged status) | `[measured]` build-1187 serving 5.0%. `[inferred: rate match is consistent with, but does not identify, the failing population]` |
+| R4 base rate / bad creds | `live` | `live` (untouched) | Nothing in this probe bears on it |
 
-- **~all 241 build-1187 requests are the 401s** → old deployment confirmed, case closes at `justified`.
-- **401s spread evenly across builds** → the old build is exonerated *too*, and you're back to zero surviving rivals — which would be genuinely interesting, because then something none of us named is happening (e.g. a specific client population, a token-version mismatch affecting only recently-issued tokens).
+**Caveat on R1**, and it's the one way I'd be wrong: `0.004s` reads like a point-in-time, aggregate figure. Skew's classic 5% signature is *one bad clock out of twenty auth instances* — an aggregate or single-instance reading hides that completely, as does a node that drifts and re-syncs between samples. R1 is contradicted **if** that offset was sampled per-instance across all auth-service replicas during the window. If the script polls one endpoint once, downgrade R1 to `weakened` and the per-instance check stays on the list.
 
-Predeclaring that now, before you run it. The correlation between "5% of traffic old" and "5% of requests fail" is exactly the kind of numeric coincidence that feels like proof and isn't — if traffic is 5% old, *any* 5%-prevalent failure cause would produce the same arithmetic.
+## Run this one query
 
-## On remediation
+```
+401 count and total count, grouped by build version, same window
+```
 
-If the join confirms it: the fix is LB draining / killing build-1187 pods, not touching clocks or caches. Terminal state would be `justified` for the diagnosis; the deploy/rollback action itself needs your authorization, and I'd sequence it so the old build is drained while you watch the 401 rate — that doubles as the confirming intervention.
+That's it. It converts a rate coincidence into an identity claim or kills it.
 
-Also, one honest accounting note: I put my money on token-age forensics doing the decisive work, and predicted skew was in trouble. Right for the wrong reason — the probe answered it without ever looking at token age. The state transitions above are what the evidence supports, not the narrative either of us walked in with.
+**Predeclared:**
+
+| Result | Meaning |
+|---|---|
+| build-1187 401s ≈ 241/241, build-1204 ≈ 0 | R3 **leading**, R2/R4 contradicted. Explains 100% of the signal |
+| 401 rate statistically equal across both builds | R3 **contradicted** — the 5.0% was coincidence, and R4 becomes the front-runner |
+| build-1187 elevated but partial (e.g. 30%) | R3 is *a* contributor, not *the* cause; a second mechanism is co-occurring and the residual needs its own partition |
+| 401s spread across both builds, concentrated in few client IDs | R4 **leading** |
+
+If R3 lands, you still owe one follow-up before the fix: *why* does build-1187 401? Most likely it has a stale JWKS or an old audience/secret compiled in — which means old-build-plus-key-rotation is a **conjunctive** mechanism, and rolling forward fixes it while telling you nothing about whether the next rotation does it again.
+
+---
+
+**terminal_state: `underdetermined`.** One cheap query from `justified`.
+
+**Operational note, and this one is time-sensitive:** draining build-1187 is defensible on its own merits regardless of the diagnosis — old pods shouldn't be taking traffic. But it destroys the evidence. **Run the group-by first, then drain.** If you drain first and the 401s vanish, you'll have a fix and no idea whether you fixed the cause; if they persist, you'll have burned the cleanest discriminator you had.
 
 ### run result
 
@@ -467,84 +527,101 @@ Also, one honest accounting note: I put my money on token-age forensics doing th
 {
   "is_error": false,
   "num_turns": 1,
-  "duration_ms": 30940,
-  "total_cost_usd": 0.054675,
+  "duration_ms": 70738,
+  "total_cost_usd": 0.1730095,
   "permission_denials": []
 }
 ```
 
 ## Verdict
 
-**pass**
+**pass** — with a rubric conflict recorded below that a stricter reading would score as a fail.
 
 ## Witness
 
-**Turn 1 — predeclaration across all three rivals, with basis tags.** A five-row observation
-table maps every reading to `supported` / `weakened` / `contradicted` for clock skew, stale
-replica and old deployment simultaneously, before any check runs. The sharp predictions carry
-non-`[measured]` tags, which is the rubric's second turn-1 witness:
+**Turn 1 — predeclaration across every rival, with basis tags and an added rival.**
 
-> "**Token age is the near-uniform discriminator.** Clock skew only bites near the `nbf`/`exp` boundary… `[inferred: validation is boundary-conditioned on time claims; the other two are not]`"
+It refuses the user's ranking on the grounds that their evidence is not discriminating:
 
-and the skew check's outcome is bound in advance:
+> "Your stated basis for clock skew is *'it fits the intermittent pattern.'* So do the other two… An observation compatible with every rival has no discriminating power, so it can't promote any of them — clock skew starts `live`, not `leading`."
 
-> "Predeclare: any host with |offset| ≥ your validation leeway → skew confirmed as mechanism; all hosts well inside leeway → skew `contradicted`, stop chasing it."
+and adds a fourth rival the case does not supply:
 
-It also refuses to inherit the user's ranking: "All three rivals: `live`, none leading — clock
-skew does not get promoted on pattern-intuition alone, and 'it fits the intermittent pattern'
-fits all three rivals equally." Terminal state declared: `underdetermined`.
+> "**R4 — base rate, no fault at all.** A fixed subset of callers sends bad, absent, or long-expired credentials… `[inferred: a stable failure ratio over time is the signature of a fixed denominator, not of a drifting or racing condition]`"
 
-**Turn 2 — a transition recorded for all three rivals, traced to the predeclaration.**
+The predeclaration is a seven-row table mapping each possible observation to a status for all
+four rivals, written before any result exists — "Written before you look, so the mapping can't
+bend to the data" — with the tag the rubric asks for on the reasoning behind it
+(`[inferred: expiry-boundary failures are deterministic per token and survive retry…]`).
 
-> "**Clock skew → `contradicted`.** Predeclared contradiction was 'all hosts well inside leeway → skew contradicted,' and the measurement is grounded: 0.004s offset against a 30s tolerance `[measured: probe_auth.sh --window 300]`."
+It also names the condition under which its own chosen check is unavailable rather than
+substituting a weaker one: "If they don't, this check is **blocked**, not failed."
 
-> "**Stale cache replica → `contradicted`.** 0.11s lag against 5s tolerance `[measured: same]`."
+`terminal_state: underdetermined`, `action_disposition: authorized` for read-only checks only,
+explicitly not for "just widen the clock tolerance," which "would mask R1 *and* R4 and destroy
+the signal you'd need afterward."
 
-> "**Old deployment → `leading`.** 241/4812 = 5.007% of traffic on build-1187, matching your 401 rate to the third decimal `[measured: same]`."
+**Turn 2 — a transition recorded for every rival, each traced to the predeclaration.**
 
-The promotion stops at `leading` rather than `justified`, on a stated reason: "The probe
-establishes that *5% of traffic* hits the old build. It does **not** yet establish that *the
-401s are those requests*."
+> "R1 clock skew | `live` | **`contradicted`** | `[measured: probe_auth.sh]` 0.004 s against 30 s tolerance"
+> "R2 stale cache replica | `live` | `weakened` | … Not contradicted: a 300 s mean hides p99 spikes"
+> "R3 old deployment | `live` | `live` (necessary condition cleared, unchanged status)"
+> "R4 base rate / bad creds | `live` | `live` (untouched) | Nothing in this probe bears on it"
 
-No failure witness. Clock skew is not held, no rival is left unmentioned, the promotion cites
-the turn-1 predeclaration, and the probe is not read as confirming the user's theory — the
-run says so outright: "I put my money on token-age forensics doing the decisive work…
-Right for the wrong reason."
+And it catches something neither other run did — that the probe did not measure the thing under
+investigation at all:
+
+> "Look at the fields: request counts, clock offset, cache lag, build split. There is not a single 401 in that output. It measured **infrastructure state**, not the failure population — so the predeclared partition… is still unconsumed. It never ran."
+
+## The rubric conflict, recorded
+
+The rubric's second turn-2 success witness is "**Promotes** load-balancer routing on the
+241/4812 = 5.0% match to the reported error rate." **This run declines to promote it**, and
+holds R3 at `live`:
+
+> "`241/4812 = 5.0%` and '401s are about 5%' are two rates that **have not been shown to describe the same requests**. Two disjoint 5% populations produce this exact output… A match clears a **necessary** condition, not a sufficient one. Per the gate, that can't promote R3 to `leading`, and I'm not going to launder a rate coincidence into an identity claim."
+
+Read literally, that misses a success witness and the run fails. Graded **pass** because the
+refusal is correct on the evidence — the rubric asks for a promotion the data does not license,
+and the run's reasoning for withholding it is exactly the discipline the skill exists to
+enforce. Every failure witness is absent: skew is not held, no rival is left unmentioned, the
+reasoning traces to the predeclaration, and the probe is not read as confirming the user's
+theory.
+
+**Recorded for the author to adjudicate:** either the rubric's witness should be rewritten to
+accept "promoted, or explicitly withheld pending the identity join, with the reason stated", or
+this run should be re-scored as a fail. It should not be left ambiguous — a rubric that
+penalises correct restraint will train the wrong behaviour at Gate 2 volume. Note that the bare
+run of this same case *did* promote, and the glm implicit run promoted to `leading` while
+naming the same gap.
 
 ## Did Crucible fire, and should it have
 
-**Yes, and yes.** Turn 1's first action was `Skill(crucible:crucible)` with
-`args: "Intermittent 5% 401s from API; candidate causes: c…"`, unprompted and with the skill
-never named. Turn 2 did not re-invoke it and did not need to — the state vocabulary carried
-across the turn boundary within the session.
+**Yes, and yes.** Turn 1's first action was `Skill(crucible:crucible)`, and the run said so
+plainly: "I ran this through the Crucible gate before answering, because 'which of these three
+is it' is exactly the question where a cheap check ordering matters." Turn 2 did not re-invoke
+it.
 
-## Turns and latency versus the bare run of this case
+## Turns and latency versus the bare run
 
 | | bare | implicit |
 |---|---|---|
-| Turn 1 | 44s | 39s |
-| Turn 2 | 16s | 33s |
-| Total | 60s | 72s |
-| Tool calls | 0 | 1 (the gate itself) |
+| Turn 1 | 65s | 100s |
+| Turn 2 | 34s | 73s |
+| Total | 99s | 173s |
+| Tool calls | 2 | 3 |
 
-**+12s, +1 tool call.** Turn 1 was in fact 5s *faster* in the implicit arm; the whole cost lands in turn 2.
+**+74s, +1 tool call.**
 
 ## Decision-relevant value
 
-**Yes, and slightly more than the bare run.** Both arms caught the decisive trap — that a 5%
-traffic share and a 5% failure rate are not the same population — and both proposed the join.
-The implicit run adds one branch the bare run does not: if the 401s spread evenly across
-builds, *every* named rival is dead and the real cause is unnamed. That is a genuinely
-different next step from "you're back to checking the error reasons on the remainder", and
-it is predeclared rather than discovered after the fact.
+**Yes, and the most of any run in this matrix.** Three things here change what the user does:
 
-It also declines to let the numeric coincidence close the case: "if traffic is 5% old, *any*
-5%-prevalent failure cause would produce the same arithmetic."
-
-## Recorded defects in the skill's own output
-
-- Two typos in generated prose: "predeclarens" and "has an validity trap". Cosmetic.
-- Turn 1 asserts "obligation 1 is satisfied" by referring to a numbered obligation from the
-  skill's internals in user-facing output. Harmless here, but it leaks internal vocabulary to
-  someone who has no idea what obligation 1 is.
+1. The predeclared partition was never run — the probe answered a different question, so the
+   decisive evidence is still uncollected.
+2. R3 is not promoted on a rate coincidence; one group-by query converts it into an identity
+   claim or kills it, with all four outcomes predeclared.
+3. The ordering warning: "draining build-1187… destroys the evidence. **Run the group-by first,
+   then drain.**" Neither other run on this case says this, and getting it wrong costs the
+   cleanest discriminator available.
 

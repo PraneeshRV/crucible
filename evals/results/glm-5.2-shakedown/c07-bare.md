@@ -9,11 +9,11 @@
 | Date run | 2026-08-14 |
 | Crucible commit | `b5602f5` (working tree clean) |
 | Harness | Claude Code CLI 2.1.232, headless `--print --output-format stream-json --verbose` |
-| Model | `claude-opus-5`, default effort |
+| Model | `glm-5.2` via the `glm` wrapper, `GLM_EFFORT=high` (`MAX_THINKING_TOKENS=16000`) |
 | Tools available | `Read Write Edit Grep Glob Bash Skill` (no `Task`/`Agent`, no web) |
 | Skills denied (both arms) | `debug`, `verify`, `code-review`, `simplify`, `deep-research` |
 | Permission mode | `bypassPermissions` |
-| Global instructions in scope | none — dedicated empty `CLAUDE_CONFIG_DIR` holding only a credentials symlink; confirmed by self-report that no `CLAUDE.md`/`AGENTS.md`/`SESSION-CORE.md` was provided |
+| Global instructions in scope | none — redirected empty `HOME`, no `CLAUDE.md`/`AGENTS.md`/`SESSION-CORE.md` |
 | Crucible reachable | no — `plugins: []` at init, no `crucible` entry in the skill list |
 | Turn structure | single turn |
 
@@ -27,7 +27,7 @@ What's the default port for PostgreSQL?
 
 ## Latency
 
-- Turn 1: **6s**
+- Turn 1: **9s**
 
 ## Transcript
 
@@ -37,7 +37,7 @@ What's the default port for PostgreSQL?
 
 ```json
 {
-  "model": "claude-opus-5",
+  "model": "glm-5.2",
   "tools": [
     "Bash",
     "Edit",
@@ -48,11 +48,9 @@ What's the default port for PostgreSQL?
     "Write"
   ],
   "skills": [
+    "deep-research",
     "design-sync",
     "dataviz",
-    "artifact-design",
-    "artifact-diagramming",
-    "artifact-capabilities",
     "update-config",
     "verify",
     "debug",
@@ -62,14 +60,12 @@ What's the default port for PostgreSQL?
     "fewer-permission-prompts",
     "doctor",
     "loop",
-    "schedule",
     "claude-api",
     "run",
     "run-skill-generator"
   ],
   "agents": [
     "claude",
-    "claude-code-guide",
     "Explore",
     "general-purpose",
     "Plan",
@@ -78,11 +74,15 @@ What's the default port for PostgreSQL?
   "plugins": [],
   "permissionMode": "bypassPermissions",
   "version": "2.1.232",
-  "cwd": "/tmp/crucible-eval/ws-8OVLsPSe/work"
+  "cwd": "/tmp/crucible-eval/ws-NuhhNhhd/work"
 }
 ```
 
-5432.
+**[thinking]**
+
+> Simple factual question. Answer: 5432.
+
+PostgreSQL's default port is **5432**.
 
 ### run result
 
@@ -90,8 +90,8 @@ What's the default port for PostgreSQL?
 {
   "is_error": false,
   "num_turns": 1,
-  "duration_ms": 4169,
-  "total_cost_usd": 0.0601865,
+  "duration_ms": 7715,
+  "total_cost_usd": 0.013317,
   "permission_denials": []
 }
 ```
@@ -104,24 +104,26 @@ What's the default port for PostgreSQL?
 
 The entire response:
 
-> "5432."
+> "PostgreSQL's default port is **5432**."
 
-No hypotheses, no rivals, no basis tags, no terminal state, no case file, no hedging. Zero tool
-calls.
+Answers 5432 directly. No hypotheses, no rivals, no basis tags, no terminal state, no case
+file, no hedging, zero tool calls.
 
 ## Critical failures
 
-**None.**
+**None.** No ceremony of any kind.
 
 ## Did Crucible fire
 
-Not applicable — bare condition.
+Not applicable — bare condition. `plugins: []` at init.
 
-## Turns and latency
+## Turns and latency versus the bare run of this case
 
-Turn 1, 6 seconds, zero tool calls.
+This is the bare run. Turn 1, 9 seconds, zero tool calls.
 
 ## Decision-relevant value
 
-**No, and correctly not.** A documented constant has no rival worth constructing.
+**No, and correctly not.** A documented constant has no rival worth constructing. Recording
+"no value" here is the right answer, not a shortfall — the measure of an anti-trigger case is
+that nothing happened.
 

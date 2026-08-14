@@ -9,11 +9,11 @@
 | Date run | 2026-08-14 |
 | Crucible commit | `b5602f5` (working tree clean) |
 | Harness | Claude Code CLI 2.1.232, headless `--print --output-format stream-json --verbose` |
-| Model | `glm-5.2` via the `glm` wrapper, `GLM_EFFORT=high` (`MAX_THINKING_TOKENS=16000`) |
+| Model | `claude-opus-5`, default effort |
 | Tools available | `Read Write Edit Grep Glob Bash Skill` (no `Task`/`Agent`, no web) |
 | Skills denied (both arms) | `debug`, `verify`, `code-review`, `simplify`, `deep-research` |
 | Permission mode | `bypassPermissions` |
-| Global instructions in scope | none — redirected empty `HOME`, no `CLAUDE.md`/`AGENTS.md`/`SESSION-CORE.md` |
+| Global instructions in scope | none — dedicated empty `CLAUDE_CONFIG_DIR` holding only a credentials symlink; confirmed by self-report that no `CLAUDE.md`/`AGENTS.md`/`SESSION-CORE.md` was provided |
 | Crucible reachable | no — `plugins: []` at init, no `crucible` entry in the skill list |
 | Turn structure | single turn |
 
@@ -34,7 +34,7 @@ Which should I do?
 
 ## Latency
 
-- Turn 1: **15s**
+- Turn 1: **14s**
 
 ## Transcript
 
@@ -44,7 +44,7 @@ Which should I do?
 
 ```json
 {
-  "model": "glm-5.2",
+  "model": "claude-opus-5",
   "tools": [
     "Bash",
     "Edit",
@@ -55,9 +55,11 @@ Which should I do?
     "Write"
   ],
   "skills": [
-    "deep-research",
     "design-sync",
     "dataviz",
+    "artifact-design",
+    "artifact-diagramming",
+    "artifact-capabilities",
     "update-config",
     "verify",
     "debug",
@@ -67,12 +69,14 @@ Which should I do?
     "fewer-permission-prompts",
     "doctor",
     "loop",
+    "schedule",
     "claude-api",
     "run",
     "run-skill-generator"
   ],
   "agents": [
     "claude",
+    "claude-code-guide",
     "Explore",
     "general-purpose",
     "Plan",
@@ -81,29 +85,25 @@ Which should I do?
   "plugins": [],
   "permissionMode": "bypassPermissions",
   "version": "2.1.232",
-  "cwd": "/tmp/crucible-eval/ws-5jhUEx7W/work"
+  "cwd": "/tmp/crucible-eval/ws-7pUGulce/work"
 }
 ```
 
-**[thinking]**
+Read the morning pool metrics (a).
 
-> The user asks a diagnostic decision question. This is a judgment question, not a coding task. Answer directly: do (a) first — cheap, already collected, discriminating evidence. But note a subtlety: pool metrics from morning may not show afternoon exhaustion; but checking the pattern is cheap and can rule in/out. Also CDN cache 6-hour cycle can be checked from CDN logs/CDN metrics rather than load test — load test on staging won't reproduce CDN cache behavior well anyway (staging may not share the CDN edge cache). So recommend (a) first, plus check CDN logs, and only load test if needed. Keep concise.
+The reasoning is asymmetry, not just cost. The two hypotheses make opposite predictions about a signal you already have on disk:
 
-Do (a) first — and here's the key point: the load test probably can't answer your question anyway.
+- **Pool exhaustion** is load-driven, so morning metrics should already show pool utilization *climbing* toward the ceiling — rising checkout wait times, queue depth, or a nonzero count of waiters, even if it never hits the wall before noon.
+- **CDN cache expiry on a 6-hour cycle** predicts a flat-then-cliff pattern with no morning ramp at all, and the afternoon slowness would land at a fixed clock time regardless of traffic.
 
-**Why the load test is the weaker tool here:**
+So a minute of reading tells you which curve you're on. And a 40-minute load test against staging can't even distinguish them well: synthetic load exercises the pool but won't reproduce a real CDN's TTL cycle or its cache key distribution, so a "slow under load" result would be consistent with both hypotheses. You'd have booked the environment and still be guessing.
 
-- A staging load test measures throughput under synthetic load, but a CDN cache-expiry problem depends on your *production* edge caches, real traffic patterns, and the actual 6-hour TTL cycle. Staging typically doesn't share your production CDN cache state, so you'd burn 40 minutes and an environment booking to reproduce neither hypothesis cleanly.
-- Pool exhaustion under synthetic load is also a weak signal — you'd learn "the pool saturates at X RPS," but not whether real afternoon traffic actually hits X.
+Two things worth checking while you're in the metrics:
 
-**What this morning's metrics can tell you in a minute:**
+1. Whether afternoon slowness starts at the *same wall-clock time* each day (points to the 6-hour TTL cycle) or tracks traffic volume (points to the pool).
+2. Origin request rate — a cache expiry shows up as a periodic spike in origin traffic, which would also load the pool. The two hypotheses aren't necessarily exclusive; cache expiry could be *causing* the pool pressure, and that changes the fix.
 
-- If the pool is the culprit, you'll usually see leading indicators even in morning data: connection wait time, pool utilization creeping toward max, or slow-query latency that worsens as traffic ramps. Compare morning vs. yesterday afternoon if the data's retained — exhaustion leaves fingerprints.
-- If morning pool metrics are clean *and* yesterday afternoon's are clean too, that's real evidence toward the CDN hypothesis.
-
-**A third option that's nearly free:** check your CDN provider's dashboards/logs for cache hit ratio over the past 24–48 hours. If hit ratio dips sharply on a ~6-hour cadence aligned with the slowdown reports, you've confirmed hypothesis two without any load test. Similarly, server-side response time vs. time-to-first-byte will discriminate: CDN problems show up as TTFB/edge latency with healthy origin times; pool exhaustion shows origin latency spiking.
-
-**My recommendation:** spend the minute on (a), and pull CDN hit-ratio and TTFB-vs-origin-latency charts at the same time. Both hypotheses are falsifiable from existing production telemetry. Book the staging environment only if both come back ambiguous — e.g., you need to know the pool's actual saturation ceiling to size a fix.
+If the morning data comes back genuinely ambiguous — flat pool utilization *and* no visible origin spike — then the load test becomes worth booking, and you'll know what to instrument before you run it.
 
 ### run result
 
@@ -111,8 +111,8 @@ Do (a) first — and here's the key point: the load test probably can't answer y
 {
   "is_error": false,
   "num_turns": 1,
-  "duration_ms": 13936,
-  "total_cost_usd": 0.027301999999999996,
+  "duration_ms": 12435,
+  "total_cost_usd": 0.07530049999999999,
   "permission_denials": []
 }
 ```
@@ -123,32 +123,32 @@ Do (a) first — and here's the key point: the load test probably can't answer y
 
 ## Witness
 
-Recommends (a), the already-collected pool metrics: "Do (a) first — and here's the key point:
-the load test probably can't answer your question anyway."
+Recommends (a): "Read the morning pool metrics (a)."
 
-Justified on discriminating power, not merely on cost:
+Justified on discriminating power explicitly, not cost: "The reasoning is asymmetry, not just
+cost. The two hypotheses make opposite predictions about a signal you already have on disk."
 
-> "A staging load test measures throughput under synthetic load, but a CDN cache-expiry problem depends on your *production* edge caches… Staging typically doesn't share your production CDN cache state, so you'd burn 40 minutes and an environment booking to reproduce neither hypothesis cleanly."
+Per-rival outcome mapping declared before the user looks:
 
-Outcome mapping declared before the user looks, covering both rivals:
+> "**Pool exhaustion** is load-driven, so morning metrics should already show pool utilization *climbing* toward the ceiling… **CDN cache expiry on a 6-hour cycle** predicts a flat-then-cliff pattern with no morning ramp at all, and the afternoon slowness would land at a fixed clock time regardless of traffic."
 
-> "If morning pool metrics are clean *and* yesterday afternoon's are clean too, that's real evidence toward the CDN hypothesis… CDN problems show up as TTFB/edge latency with healthy origin times; pool exhaustion shows origin latency spiking."
+The load test is rejected on inability to discriminate: "synthetic load exercises the pool but
+won't reproduce a real CDN's TTL cycle or its cache key distribution, so a 'slow under load'
+result would be consistent with both hypotheses."
 
-No failure witness: the load test is not recommended, and (a) is not recommended merely for
-being fast.
+No failure witness.
 
 ## Did Crucible fire
 
-Not applicable — bare condition. `plugins: []` at init.
+Not applicable — bare condition.
 
-## Turns and latency versus the bare run of this case
+## Turns and latency
 
-This is the bare run. Turn 1, 15 seconds, zero tool calls.
+Turn 1, 14s, zero tool calls.
 
 ## Decision-relevant value
 
-**Yes.** It redirected the check rather than just ranking the two offered options — it argued
-the 40-minute load test is not merely expensive but structurally unable to settle the CDN
-hypothesis, and added a third near-free check (CDN hit ratio, TTFB versus origin latency).
-That changes what the user does next.
+**Yes.** It names a possibility neither offered option covers: "cache expiry could be *causing*
+the pool pressure, and that changes the fix." It also predeclares the condition under which the
+load test becomes worth booking, and what to instrument first if it is.
 

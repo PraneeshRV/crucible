@@ -9,11 +9,11 @@
 | Date run | 2026-08-14 |
 | Crucible commit | `b5602f5` (working tree clean) |
 | Harness | Claude Code CLI 2.1.232, headless `--print --output-format stream-json --verbose` |
-| Model | `glm-5.2` via the `glm` wrapper, `GLM_EFFORT=high` (`MAX_THINKING_TOKENS=16000`) |
+| Model | `claude-opus-5`, default effort |
 | Tools available | `Read Write Edit Grep Glob Bash Skill` (no `Task`/`Agent`, no web) |
 | Skills denied (both arms) | `debug`, `verify`, `code-review`, `simplify`, `deep-research` |
 | Permission mode | `bypassPermissions` |
-| Global instructions in scope | none — redirected empty `HOME`, no `CLAUDE.md`/`AGENTS.md`/`SESSION-CORE.md` |
+| Global instructions in scope | none — dedicated empty `CLAUDE_CONFIG_DIR` holding only a credentials symlink; confirmed by self-report that no `CLAUDE.md`/`AGENTS.md`/`SESSION-CORE.md` was provided |
 | Crucible reachable | yes — session-scoped `--plugin-dir`; `plugins: ['crucible']` at init, never named in the prompt |
 | Turn structure | single turn |
 
@@ -34,7 +34,7 @@ Which should I do?
 
 ## Latency
 
-- Turn 1: **22s**
+- Turn 1: **33s**
 
 ## Transcript
 
@@ -44,7 +44,7 @@ Which should I do?
 
 ```json
 {
-  "model": "glm-5.2",
+  "model": "claude-opus-5",
   "tools": [
     "Bash",
     "Edit",
@@ -55,10 +55,12 @@ Which should I do?
     "Write"
   ],
   "skills": [
-    "deep-research",
     "crucible:crucible",
     "design-sync",
     "dataviz",
+    "artifact-design",
+    "artifact-diagramming",
+    "artifact-capabilities",
     "update-config",
     "verify",
     "debug",
@@ -68,12 +70,14 @@ Which should I do?
     "fewer-permission-prompts",
     "doctor",
     "loop",
+    "schedule",
     "claude-api",
     "run",
     "run-skill-generator"
   ],
   "agents": [
     "claude",
+    "claude-code-guide",
     "Explore",
     "general-purpose",
     "Plan",
@@ -84,41 +88,30 @@ Which should I do?
   ],
   "permissionMode": "bypassPermissions",
   "version": "2.1.232",
-  "cwd": "/tmp/crucible-eval/ws-6xHpka2x/work"
+  "cwd": "/tmp/crucible-eval/ws-Wgm8B3fH/work"
 }
 ```
 
 **[thinking]**
 
-> The user is asking which diagnostic path to take. This is a decision about an expensive-to-get-wrong conclusion? The crucible skill triggers when about to commit to a conclusion that is expensive to get wrong — root cause diagnosis. Here I'm advising on which diagnostic step to take. The skill says "Use when about to commit to a conclusion - a root cause..." But I'm not concluding a root cause yet; I'm recommending a cheap first step. Actually the skill is designed for exactly this kind of rival-explanation situation. Hmm, but the question is just "which should I do" — sequencing diagnostics. The answer is obvious: (a) first, it's cheap and can discriminate between hypotheses.
 > 
-> Do I need crucible? The user hasn't asked me to conclude a root cause; they asked which action to take. I could invoke crucible to be safe since it's a root-cause investigation with rival explanations. The skill description: "Use when about to commit to a conclusion that is expensive to get wrong - a root cause..." — this is early-stage diagnosis, not committing. I think a direct answer is fine. But the trigger explicitly mentions "including when only one explanation has been considered" — here two are considered. The skill forces rival explanations etc. I'll just answer directly; the decision is cheap and reversible (reading metrics). The recommendation (a) is low-cost and doesn't foreclose anything.
-> 
-> Actually let me consider invoking the skill — it's a judgment call. The cost of invoking is low. But the skill is for committing to conclusions. My answer: do (a) first, with specific discriminating predictions. One caveat: morning pool metrics may not show afternoon exhaustion; better to look at yesterday's/this morning's metrics covering the afternoon window, or check CDN hit-rate metrics which are also already collected. The key point: check data that covers the slow period. If pool metrics show saturation during afternoon slowness → pool. If pool is idle but CDN hit rate dips on a 6h cycle → CDN.
-> 
-> Give predictions in advance: pool exhaustion → connection wait time/queueing, active == max, latency dominated by DB wait; CDN → cache hit ratio drops periodically, latency dominated by origin fetch/TTFB on static assets.
-> 
-> Keep it concise.
 
-Do (a) first — but check that the metrics actually cover the slow window, not just this morning.
+**(a) — read the morning metrics now.** It costs a minute, and booking staging for 40 minutes to answer a question you might already have the data for is the wrong order regardless of which hypothesis is right.
 
-Reading already-collected metrics is a minute of work, it's non-destructive, and it can discriminate between your two hypotheses. A 40-minute staging load test costs you the booking *and* has a real chance of telling you nothing: staging rarely reproduces production traffic shape, so a clean run under load wouldn't rule out pool exhaustion caused by your real afternoon traffic pattern. Save it for when you've narrowed the hypothesis and know what you're trying to reproduce.
+But be honest about what (a) can and can't tell you. Morning data is from a window where the symptom doesn't occur, so it can't confirm either cause. It can do two useful things:
 
-Two things to get right before you look, so the data can actually settle it:
+- **Falsify pool exhaustion cheaply.** If the morning peak sits at 10% of pool capacity, an afternoon traffic bump plausibly doesn't get you to exhaustion, and the hypothesis is weak. If mornings already peak at 85–95% with rising checkout wait times, afternoon exhaustion is very likely.
+- **Give you the baseline** you'll need to interpret any afternoon number you collect later.
 
-1. **Pull the window that matches the symptom.** This morning's pool metrics only bound the problem if mornings are also slow — and you said they aren't. Grab yesterday's (or last week's) metrics covering the afternoon slowdown, plus the equivalent morning window as a baseline.
+Two things worth doing before you consider (b):
 
-2. **Decide what each hypothesis predicts before you look.** Otherwise it's easy to eyeball a graph and retrofit whichever story you came with.
+**Check the shape of the slowness in production, not staging.** Pool exhaustion ramps — latency degrades as concurrency climbs, and recovers as it falls. CDN expiry is a cliff — sharp onset, origin request spike, recovery once the cache refills. Your existing APM/latency graphs already distinguish these, at no cost.
 
-| Signal | Pool exhaustion | CDN 6-hour expiry |
-|---|---|---|
-| Active connections | Sits at max during the slow window, with waits/queueing | Flat, lots of headroom |
-| Cache hit ratio | Unaffected | Sawtooth — drops sharply every ~6h, recovers as cache warms |
-| Where latency shows up | Time waiting on connection acquisition / DB query time | TTFB on cacheable assets; origin fetch spikes |
+**The 6-hour claim is checkable from timestamps alone.** A true 6-hour TTL cycle should bite four times a day, not only in the afternoon. If it's afternoon-only, the CDN story requires an expiry that happens to land near peak traffic — which means the onset time should drift or recur at fixed clock offsets tied to deploy/purge time. Pull the CDN cache hit ratio and origin request rate for a couple of days and look at whether the dips land where the slowness lands.
 
-The pool and CDN metrics are presumably both already collected — check both in the same pass, since the discriminating signal is which one moves *in the afternoon window specifically* and which one doesn't.
+On (b) specifically: a staging load test is a poor instrument for the CDN hypothesis. Staging usually isn't behind the same CDN with the same cache population and traffic mix, and a synthetic test doesn't reproduce a time-of-day expiry cycle at all. It's a reasonable way to confirm pool exhaustion *after* you've narrowed to that — as a capacity check with a known concurrency target — but not as a way to choose between the two.
 
-One outcome worth flagging in advance: if the pool metrics look healthy and the cache ratio is flat, you've falsified both hypotheses with a minute of work, and *that's* when the load test — or more likely, tracing/APM on a real afternoon — becomes worth booking. The failure mode to avoid is running the load test first, getting ambiguous results, and having burned your staging window on the wrong question.
+So: read the metrics, then pull afternoon production telemetry for pool utilization and cache hit ratio. Book staging only if those come back ambiguous, and by then you'll know what load level to test at.
 
 ### run result
 
@@ -126,8 +119,8 @@ One outcome worth flagging in advance: if the pool metrics look healthy and the 
 {
   "is_error": false,
   "num_turns": 1,
-  "duration_ms": 20481,
-  "total_cost_usd": 0.037842,
+  "duration_ms": 31416,
+  "total_cost_usd": 0.1088355,
   "permission_denials": []
 }
 ```
@@ -138,53 +131,47 @@ One outcome worth flagging in advance: if the pool metrics look healthy and the 
 
 ## Witness
 
-Recommends (a): "Do (a) first — but check that the metrics actually cover the slow window,
-not just this morning."
+Recommends (a), with the cost/value ordering stated first: "booking staging for 40 minutes to
+answer a question you might already have the data for is the wrong order regardless of which
+hypothesis is right."
 
-Justified on discriminating power against cost, with the load test's weakness named
-concretely:
+The limits of (a) are declared before it is run — the same catch the glm arm made:
 
-> "A 40-minute staging load test costs you the booking *and* has a real chance of telling you nothing: staging rarely reproduces production traffic shape, so a clean run under load wouldn't rule out pool exhaustion caused by your real afternoon traffic pattern."
+> "Morning data is from a window where the symptom doesn't occur, so it can't confirm either cause."
 
-Outcome mapping declared before looking, as an explicit per-rival table over active
-connections, cache hit ratio, and where latency appears — and the instruction to fix the
-predictions first: "Decide what each hypothesis predicts before you look. Otherwise it's easy
-to eyeball a graph and retrofit whichever story you came with."
+Per-rival predeclaration with thresholds attached:
 
-It also predeclares the both-rivals-falsified branch: "if the pool metrics look healthy and
-the cache ratio is flat, you've falsified both hypotheses with a minute of work, and *that's*
-when the load test… becomes worth booking."
+> "**Falsify pool exhaustion cheaply.** If the morning peak sits at 10% of pool capacity, an afternoon traffic bump plausibly doesn't get you to exhaustion… If mornings already peak at 85–95% with rising checkout wait times, afternoon exhaustion is very likely."
+
+> "Pool exhaustion ramps — latency degrades as concurrency climbs, and recovers as it falls. CDN expiry is a cliff — sharp onset, origin request spike, recovery once the cache refills."
+
+The load test is placed correctly rather than dismissed: "a reasonable way to confirm pool
+exhaustion *after* you've narrowed to that… but not as a way to choose between the two."
 
 No failure witness.
 
 ## Did Crucible fire, and should it have
 
-**No — zero tool calls, no `Skill` invocation.** Whether it should have is genuinely arguable:
-the user is choosing which check to run, not committing to a conclusion, and the action is
-cheap and reversible, which is squarely inside the skill's own "do NOT use" list. Against
-that, c02 exists to test a Crucible obligation (highest decision value per cost) and the
-gate stayed silent on it. Recorded as a non-fire that the anti-trigger language arguably
-licenses.
+**No — zero tool calls.** Same non-fire as the glm arm on the same case, and the same argument
+applies: the user is choosing a check, not committing to a conclusion, and the action is cheap
+and reversible. Two models, same call.
 
-Worth noting for the summary: the implicit run produced a *more* structured predeclaration
-than the bare run without ever invoking the skill. The skill's description sits in context
-whether or not it fires, so this arm is not a clean "Crucible absent" comparison even when the
-gate does not run.
-
-## Turns and latency versus the bare run of this case
+## Turns and latency versus the bare run
 
 | | bare | implicit |
 |---|---|---|
-| Wall clock | 15s | 22s |
+| Wall clock | 14s | 33s |
 | Tool calls | 0 | 0 |
 
-**+7s, no added turns.** No ceremony, since the gate never fired.
+**+19s, no added turns.** No ceremony, since the gate never fired.
 
 ## Decision-relevant value
 
-**Yes, and more than the bare run.** It caught a defect in the user's own option (a): this
-morning's metrics do not cover the afternoon window where the symptom lives, so reading them
-as offered could produce a clean result that means nothing. It converts (a) into "pull
-yesterday afternoon plus a morning baseline". The bare run mentioned comparing to yesterday
-afternoon in passing; here it is the gating condition on the recommendation.
+**Yes, and more than the bare run.** It attacks the user's framing of the CDN hypothesis from
+the timestamps alone:
+
+> "A true 6-hour TTL cycle should bite four times a day, not only in the afternoon. If it's afternoon-only, the CDN story requires an expiry that happens to land near peak traffic."
+
+A free falsification test of the second hypothesis, available before any metric is pulled. The
+bare run did not find it.
 

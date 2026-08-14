@@ -9,11 +9,11 @@
 | Date run | 2026-08-14 |
 | Crucible commit | `b5602f5` (working tree clean) |
 | Harness | Claude Code CLI 2.1.232, headless `--print --output-format stream-json --verbose` |
-| Model | `claude-opus-5`, default effort |
+| Model | `glm-5.2` via the `glm` wrapper, `GLM_EFFORT=high` (`MAX_THINKING_TOKENS=16000`) |
 | Tools available | `Read Write Edit Grep Glob Bash Skill` (no `Task`/`Agent`, no web) |
 | Skills denied (both arms) | `debug`, `verify`, `code-review`, `simplify`, `deep-research` |
 | Permission mode | `bypassPermissions` |
-| Global instructions in scope | none — dedicated empty `CLAUDE_CONFIG_DIR` holding only a credentials symlink; confirmed by self-report that no `CLAUDE.md`/`AGENTS.md`/`SESSION-CORE.md` was provided |
+| Global instructions in scope | none — redirected empty `HOME`, no `CLAUDE.md`/`AGENTS.md`/`SESSION-CORE.md` |
 | Crucible reachable | yes — session-scoped `--plugin-dir`; `plugins: ['crucible']` at init, never named in the prompt |
 | Turn structure | single turn |
 
@@ -27,7 +27,7 @@ What's the default port for PostgreSQL?
 
 ## Latency
 
-- Turn 1: **5s**
+- Turn 1: **6s**
 
 ## Transcript
 
@@ -37,7 +37,7 @@ What's the default port for PostgreSQL?
 
 ```json
 {
-  "model": "claude-opus-5",
+  "model": "glm-5.2",
   "tools": [
     "Bash",
     "Edit",
@@ -48,12 +48,10 @@ What's the default port for PostgreSQL?
     "Write"
   ],
   "skills": [
+    "deep-research",
     "crucible:crucible",
     "design-sync",
     "dataviz",
-    "artifact-design",
-    "artifact-diagramming",
-    "artifact-capabilities",
     "update-config",
     "verify",
     "debug",
@@ -63,14 +61,12 @@ What's the default port for PostgreSQL?
     "fewer-permission-prompts",
     "doctor",
     "loop",
-    "schedule",
     "claude-api",
     "run",
     "run-skill-generator"
   ],
   "agents": [
     "claude",
-    "claude-code-guide",
     "Explore",
     "general-purpose",
     "Plan",
@@ -81,11 +77,15 @@ What's the default port for PostgreSQL?
   ],
   "permissionMode": "bypassPermissions",
   "version": "2.1.232",
-  "cwd": "/tmp/crucible-eval/ws-S1Cb7Q3H/work"
+  "cwd": "/tmp/crucible-eval/ws-G1Edg9Iu/work"
 }
 ```
 
-5432
+**[thinking]**
+
+> Simple factual question.
+
+The default port for PostgreSQL is **5432**.
 
 ### run result
 
@@ -93,45 +93,46 @@ What's the default port for PostgreSQL?
 {
   "is_error": false,
   "num_turns": 1,
-  "duration_ms": 3671,
-  "total_cost_usd": 0.06182150000000001,
+  "duration_ms": 4179,
+  "total_cost_usd": 0.013677,
   "permission_denials": []
 }
 ```
 
 ## Verdict
 
-**pass** — one of the two results that matter most in the matrix.
+**pass** — and this is one of the two results that matter most in the matrix.
 
 ## Witness
 
-The entire response, with Crucible installed and the `Skill` tool available:
+The entire response, with Crucible installed and reachable:
 
-> "5432"
+> "The default port for PostgreSQL is **5432**."
 
 No hypotheses, no rivals, no basis tags, no terminal state, no case file, no offer to open one,
-no mention of Crucible or of gating. Zero tool calls — the gate was reachable and was not
-touched.
+no mention of Crucible or of gating. Zero tool calls: the `Skill` tool was available and was
+not touched.
 
 ## Critical failures
 
 **None.** The brief names visible ceremony on an anti-trigger as the likeliest failure mode in
-the whole design. It did not occur.
+the whole design, because the trigger is deliberately wide. It did not fire.
 
 ## Did Crucible fire, and should it have
 
 **No, and it should not have.** A single-fact lookup with no downside if wrong is explicitly in
-the skill's own "do NOT use" list.
+the skill's own "do NOT use" list, and the description-level trigger held.
 
-## Turns and latency versus the bare run
+## Turns and latency versus the bare run of this case
 
 | | bare | implicit |
 |---|---|---|
-| Wall clock | 6s | 5s |
+| Wall clock | 9s | 6s |
 | Tool calls | 0 | 0 |
 
-**No added turns, no added latency.** The cost of having Crucible installed, on a question it
-should ignore, was zero.
+**No added turns and no added latency** — the implicit run was in fact 3s faster, which is
+run-to-run noise at this scale, not an effect. The point is that the cost of having Crucible
+installed, on a question it should ignore, was zero.
 
 ## Decision-relevant value
 
