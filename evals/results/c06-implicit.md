@@ -564,6 +564,8 @@ prompt says the HIL bench is down, not that hardware evidence is unobtainable. C
 `underdetermined` also changes the recommendation in a decision-relevant direction: it puts a
 manual gravimetric bench on tonight's critical path, which `blocked` would not.
 
+**Resolved 2026-08-14, after this grade was recorded — the other way.** The prompt was closed rather than the rubric relaxed: c06 is the suite's only `blocked` coverage (c05 owns `underdetermined`), so accepting `underdetermined` here would have taken a terminal state to zero coverage. `prompt.md` now states that the actuator fixtures and the calibrated dose-accuracy instruments went back with the bench, which closes the degraded path by a stated mechanism and leaves `blocked` entailed by the case's own text. **This grade stands** — it was produced against the prompt as it read at `cde3517`, under which the run's reading was defensible. A re-run on the amended prompt is a Gate 2 question, not a re-grade of this one. The original recommendation is kept below for the record:
+
 **Recorded for the author to adjudicate.** Either c06's prompt should close the degraded-mode
 door explicitly (state that no pumps or scales are available either), or the rubric should
 accept `underdetermined` where the run argues the evidence is obtainable in weaker form and

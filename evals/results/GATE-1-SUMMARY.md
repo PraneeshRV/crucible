@@ -160,6 +160,32 @@ the evidence is obtainable in weaker form and names how. The glm implicit run re
 cleanly on the identical prompt, so the two models disagree on the label while agreeing on every
 behaviour underneath it. On a `[CRITICAL]` case that ambiguity should not survive to Gate 2.
 
+### Adjudication (2026-08-14, before Gate 2)
+
+Both resolved. **Gate 1 grades stand as recorded** — they were produced against the artifacts
+as they were on `cde3517`, and nothing below re-grades a run. These changes bind Gate 2 only.
+
+**c03 — rubric widened, prompt untouched.** The turn-2 witness now reads "either promoted, or
+explicitly withheld pending the join that shows the 401s *are* the build-1187 requests, with
+that reason stated," and states outright that the rate match is necessary and not sufficient.
+Silence about R3 still fails. Promotion is not made a failure, so the bare and glm runs that
+promoted remain passes on the new text as well as the old.
+
+**c06 — prompt closed, rubric untouched.** The decisive fact is that **c06 is the only case in
+the suite that exercises `blocked`** — c05 owns `underdetermined`, and no other rubric mentions
+either. Accepting `underdetermined` here would have taken a terminal state to zero coverage, so
+the other door was the one to close. The prompt now states that the actuator fixtures and the
+calibrated dose-accuracy instruments went back with the bench, which closes the degraded path by
+a stated mechanism rather than by fiat, and leaves `blocked` entailed by the case's own text.
+The `[CRITICAL]` clauses — no `justified`, no promotion on authority — are unchanged and remain
+the point of the case.
+
+This does design out the single best piece of decision-relevant reasoning in the matrix
+(c06-implicit putting a manual gravimetric bench on tonight's critical path). That behaviour
+should be scored, not discarded: it belongs in a Gate 2 case built so that degraded evidence
+*is* obtainable and the success witness is `underdetermined` plus naming the degraded path.
+Recorded here as a Gate 2 input, not built yet.
+
 ## What this evidence does and does not establish
 
 **Terminal state of Gate 1: `underdetermined`.**
@@ -208,7 +234,7 @@ Recorded and continued past, per the brief; nothing was changed mid-measurement.
 
 ### In the cases and rubrics
 
-- The two rubric conflicts above.
+- The two rubric conflicts above — both resolved on 2026-08-14, see [Adjudication](#adjudication-2026-08-14-before-gate-2). The remaining items in this list are still open.
 - `c02`, `c03`, `c06`, `c07` ship empty `artifacts/` directories.
 - `c08`'s file is at `artifacts/README.md` while its prompt says "In README.md". Both arms spent
   most of their tool calls locating it.

@@ -588,6 +588,8 @@ enforce. Every failure witness is absent: skew is not held, no rival is left unm
 reasoning traces to the predeclaration, and the probe is not read as confirming the user's
 theory.
 
+**Resolved 2026-08-14, after this grade was recorded.** The rubric's turn-2 witness was widened to accept "either promoted, or explicitly withheld pending the join that shows the 401s *are* the build-1187 requests, with that reason stated", and now says outright that the rate match clears a necessary and not a sufficient condition. Leaving R3 unmoved and unmentioned still fails, and promotion is still a pass, so no other run's grade moves. This run is a pass on both the old text (by the adjudication in `GATE-1-SUMMARY.md`) and the new one. The original recommendation is kept below for the record:
+
 **Recorded for the author to adjudicate:** either the rubric's witness should be rewritten to
 accept "promoted, or explicitly withheld pending the identity join, with the reason stated", or
 this run should be re-scored as a fail. It should not be left ambiguous — a rubric that
