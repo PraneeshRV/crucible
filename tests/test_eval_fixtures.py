@@ -6,10 +6,12 @@ REPO = Path(__file__).resolve().parents[1]
 CASES = REPO / "evals" / "cases"
 RUBRICS = REPO / "evals" / "rubrics"
 
-IDS = [f"c{n:02d}" for n in range(1, 11)]
+# Derived from disk, not hardcoded: a hardcoded list silently exempts every case added
+# later from the invariants below, which is how c11 and c12 arrived uncovered.
+IDS = sorted(p.name for p in CASES.iterdir() if p.is_dir() and p.name.startswith("c"))
 
 # Cases delivered as two staged turns.
-STAGED = ["c03", "c04", "c05", "c06"]
+STAGED = [c for c in IDS if (CASES / c / "turn2.md").is_file()]
 
 # Words that would tell the agent what is being tested.
 LEAK_WORDS = [
