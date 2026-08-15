@@ -1,21 +1,21 @@
 {
-  "_comment": "Gate 2 per spec 3.4-3.5: reps follow the risk model, not convenience. Cases 7 and 8 are anti-triggers and run bare+implicit only, because explicit invocation on a lookup tests nothing about firing. Cases 11-14 were added after the Gate 2 bare-arm screen; see results/gate2-screen/README.md for why 11, 13 and 14 are kept on coverage rather than headroom. Adding a 3-rep case costs 9 runs per harness.",
-  "harness": "glm",
-  "model": "glm-5.2",
+  "_comment": "Gate 2 per spec 3.4 thresholds as amended by 3.6 (2026-08-15): a reliability gate, not an improvement gate. The bare arm is dropped everywhere except c12, because with the skill uninstalled it measures the model rather than the gate; on the anti-triggers it measures less still, since only the implicit arm can exhibit the failure under test. Reps are untouched — 3/3 is the reliability claim. Anti-triggers c07/c08 run implicit only: explicit invocation on a lookup tests nothing about firing, and bare tests nothing about the skill. 65 runs per harness, 130 across claude and codex, inside the 144 predeclared in 3.5. Cases 11-14 were added after the Gate 2 bare-arm screen; see results/gate2-screen/README.md for why 11, 13 and 14 are kept on coverage rather than headroom.",
+  "harness": "claude",
+  "model": "claude-opus-5",
   "cases": {
-    "c01": {"reps": 3, "conditions": ["bare", "implicit", "explicit"]},
-    "c02": {"reps": 3, "conditions": ["bare", "implicit", "explicit"]},
-    "c03": {"reps": 3, "conditions": ["bare", "implicit", "explicit"]},
-    "c04": {"reps": 3, "conditions": ["bare", "implicit", "explicit"]},
-    "c05": {"reps": 1, "conditions": ["bare", "implicit", "explicit"]},
-    "c06": {"reps": 3, "conditions": ["bare", "implicit", "explicit"]},
-    "c07": {"reps": 3, "conditions": ["bare", "implicit"]},
-    "c08": {"reps": 3, "conditions": ["bare", "implicit"]},
-    "c09": {"reps": 1, "conditions": ["bare", "implicit", "explicit"]},
-    "c10": {"reps": 3, "conditions": ["bare", "implicit", "explicit"]},
-    "c11": {"reps": 1, "conditions": ["bare", "implicit", "explicit"]},
+    "c01": {"reps": 3, "conditions": ["implicit", "explicit"]},
+    "c02": {"reps": 3, "conditions": ["implicit", "explicit"]},
+    "c03": {"reps": 3, "conditions": ["implicit", "explicit"]},
+    "c04": {"reps": 3, "conditions": ["implicit", "explicit"]},
+    "c05": {"reps": 1, "conditions": ["implicit", "explicit"]},
+    "c06": {"reps": 3, "conditions": ["implicit", "explicit"]},
+    "c07": {"reps": 3, "conditions": ["implicit"]},
+    "c08": {"reps": 3, "conditions": ["implicit"]},
+    "c09": {"reps": 1, "conditions": ["implicit", "explicit"]},
+    "c10": {"reps": 3, "conditions": ["implicit", "explicit"]},
+    "c11": {"reps": 1, "conditions": ["implicit", "explicit"]},
     "c12": {"reps": 3, "conditions": ["bare", "implicit", "explicit"]},
-    "c13": {"reps": 1, "conditions": ["bare", "implicit", "explicit"]},
-    "c14": {"reps": 3, "conditions": ["bare", "implicit", "explicit"]}
+    "c13": {"reps": 1, "conditions": ["implicit", "explicit"]},
+    "c14": {"reps": 3, "conditions": ["implicit", "explicit"]}
   }
 }
