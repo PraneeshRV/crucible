@@ -51,15 +51,24 @@ CONDITIONS = {
 # output length distinguishes it from a terse correct answer, so it is matched by text.
 REFUSAL_SENTINELS = (
     "hit your session limit",
+    "reached your usage limit",
     "usage limit reached",
-    "rate limit",
+    "rate limit exceeded",
     "quota exceeded",
+    "too many requests",
 )
+# A refusal is the entire response. The cases are about diagnosis, so a real answer may
+# discuss rate limits at length — c01's bare run reasons about exactly that — and matching
+# on the phrase alone would throw away correct work. The real messages are one short line.
+REFUSAL_MAX_CHARS = 400
 
 
 def refusal_in(response: str) -> str | None:
     """The sentinel a harness refusal matched, or None for a real answer."""
-    low = response.lower()
+    body = response.strip()
+    if len(body) > REFUSAL_MAX_CHARS:
+        return None
+    low = body.lower()
     return next((s for s in REFUSAL_SENTINELS if s in low), None)
 
 

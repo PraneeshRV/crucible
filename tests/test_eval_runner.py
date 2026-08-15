@@ -214,6 +214,21 @@ def test_a_terse_real_answer_is_not_mistaken_for_a_refusal():
     assert runner_refusal("You've hit your session limit · resets 11:20am") is not None
 
 
+def test_an_answer_that_discusses_rate_limits_survives():
+    # c01's own bare run reasons that "a rate limit produces this exact signature". A
+    # phrase-only guard discards correct work on precisely the cases the suite is made of.
+    real = (
+        "ConnectionResetError in exactly two upload tests has an obvious non-dependency "
+        "reading. A test server that now closes on large bodies, a proxy change, or a "
+        "rate limit exceeded on the staging host produces this signature with no "
+        "dependency change at all. 28 of 30 tests passing is mild evidence against a "
+        "library-wide regression, so the discriminating check is whether the two failures "
+        "share an endpoint rather than a package version."
+    )
+    assert len(real) > 400, "the fixture must exceed the length gate to test it"
+    assert runner_refusal(real) is None
+
+
 def runner_refusal(text):
     from run import refusal_in
 
