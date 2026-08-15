@@ -7,7 +7,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "evals"))
 
-from run import BUILTIN_SKILLS, CONDITIONS, build_home  # noqa: E402
+from run import BUILTIN_SKILLS, CONDITIONS, build_home, harness_cmd  # noqa: E402
 
 MATRICES = sorted((REPO / "evals").glob("matrix-*.json"))
 
@@ -40,15 +40,15 @@ def test_builtin_skills_are_denied_by_name():
 
 @pytest.mark.parametrize("install", [True, False])
 def test_build_home_is_disposable_and_isolated(tmp_path, install):
-    home = build_home(tmp_path, install)
+    home = build_home(tmp_path, install, "glm")
     assert not (home / "CLAUDE.md").exists()
     assert (home / ".claude" / "skills" / "crucible").is_dir() == install
 
 
 def test_build_home_replaces_a_stale_home(tmp_path):
-    home = build_home(tmp_path, False)
+    home = build_home(tmp_path, False, "glm")
     (home / ".claude" / "skills" / "leftover").mkdir()
-    assert not (build_home(tmp_path, False) / ".claude" / "skills" / "leftover").exists()
+    assert not (build_home(tmp_path, False, "glm") / ".claude" / "skills" / "leftover").exists()
 
 
 @pytest.mark.parametrize("path", MATRICES, ids=lambda p: p.name)
@@ -66,6 +66,179 @@ def test_anti_triggers_never_run_explicit():
     cfg = json.loads((REPO / "evals" / "matrix-gate2.json").read_text())
     for case_id in ("c07", "c08"):
         assert "explicit" not in cfg["cases"][case_id]["conditions"]
+
+
+CODEX_CFG = {"harness": "codex", "model": "gpt-5.6-sol"}
+
+
+@pytest.fixture
+def codex_host(tmp_path, monkeypatch):
+    """Stand in for the operator's ~/.codex so these tests do not depend on this machine."""
+    marker = tmp_path / "host" / "skills" / ".system" / ".codex-system-skills.marker"
+    marker.parent.mkdir(parents=True)
+    marker.write_text("0123456789abcdef")
+    auth = tmp_path / "host" / "auth.json"
+    auth.write_text('{"note": "not a real token"}')
+    monkeypatch.setattr("run.CODEX_SYSTEM_MARKER", marker)
+    monkeypatch.setattr("run.REAL_CODEX_AUTH", auth)
+    return auth
+
+
+def test_codex_home_suppresses_the_builtin_system_skills(tmp_path, codex_host):
+    # Codex reinstalls its six .system skills into any CODEX_HOME whose marker is absent,
+    # which lifts the bare baseline exactly the way the claude built-ins would.
+    system = build_home(tmp_path / "cell", False, "codex") / ".codex" / "skills" / ".system"
+    assert [p.name for p in system.iterdir()] == [".codex-system-skills.marker"]
+
+
+def test_codex_marker_tracks_the_installed_version(tmp_path, codex_host):
+    # The marker holds a version hash. Copying the live one means a codex upgrade cannot
+    # leave a stale constant behind that silently stops suppressing anything.
+    seeded = build_home(tmp_path / "cell", False, "codex")
+    marker = seeded / ".codex" / "skills" / ".system" / ".codex-system-skills.marker"
+    assert marker.read_text() == "0123456789abcdef"
+
+
+def test_codex_auth_is_linked_never_copied(tmp_path, codex_host):
+    # A copied token would be a secret written into an eval directory.
+    link = build_home(tmp_path / "cell", False, "codex") / ".codex" / "auth.json"
+    assert link.is_symlink() and link.readlink() == codex_host
+
+
+@pytest.mark.parametrize("install", [True, False])
+def test_codex_installs_crucible_only_when_the_condition_asks(tmp_path, codex_host, install):
+    home = build_home(tmp_path / "cell", install, "codex")
+    assert (home / ".codex" / "skills" / "crucible").is_dir() == install
+
+
+def test_codex_turn_two_resumes_the_cell_own_session():
+    first = harness_cmd(CODEX_CFG, "ask", 1, "sid", Path("/w"), [])
+    second = harness_cmd(CODEX_CFG, "then", 2, "sid", Path("/w"), [])
+    assert first[:2] == ["codex", "exec"] and "resume" not in first
+    assert second[:4] == ["codex", "exec", "resume", "--last"]
+    # --last is only safe because each cell owns its CODEX_HOME and records one session
+    # there. The session id claude threads through is deliberately unused.
+    assert "sid" not in second
+    assert first[-1] == "ask" and second[-1] == "then"
+
+
+def test_codex_avoids_options_resume_rejects():
+    # `codex exec resume` accepts neither --sandbox nor -C. Passing either makes turn 2
+    # exit with a usage error while turn 1 succeeds, which reads as a one-turn case.
+    for turn in (1, 2):
+        cmd = harness_cmd(CODEX_CFG, "ask", turn, "sid", Path("/w"), [])
+        assert "--sandbox" not in cmd and "-C" not in cmd
+    assert "sandbox_mode='workspace-write'" in harness_cmd(CODEX_CFG, "a", 1, "s", Path("/w"), [])
+
+
+def test_a_failed_turn_leaves_no_transcript_to_skip(tmp_path, monkeypatch):
+    # A cell is skipped when its output file is non-empty, so a recorded harness failure
+    # would survive every rerun meant to repair it — and be graded as behaviour.
+    import run as runner
+
+    work = tmp_path / "ws" / "workspace"
+    work.mkdir(parents=True)
+    (work / "prompt.md").write_text("ask")
+    monkeypatch.setattr(runner, "materialize", lambda case_id, dest: work)
+    monkeypatch.setattr(runner, "build_home", lambda root, install, harness: tmp_path / "home")
+
+    class Failed:
+        returncode = 1
+        stdout = ""
+        stderr = "error: unexpected argument '--sandbox' found"
+
+    monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: Failed())
+    outdir = tmp_path / "out"
+    outdir.mkdir()
+    cfg = {"harness": "codex", "model": "gpt-5.6-sol", "commit": "abc1234"}
+    status = runner.run_cell("c01", "implicit", 1, cfg, outdir, tmp_path / "wr")
+
+    assert status.startswith("FAIL")
+    assert list(outdir.iterdir()) == []
+
+
+def test_an_empty_response_is_a_failure_too(tmp_path, monkeypatch):
+    # Exit 0 with nothing on stdout is a harness problem wearing a success code.
+    import run as runner
+
+    work = tmp_path / "ws" / "workspace"
+    work.mkdir(parents=True)
+    (work / "prompt.md").write_text("ask")
+    monkeypatch.setattr(runner, "materialize", lambda case_id, dest: work)
+    monkeypatch.setattr(runner, "build_home", lambda root, install, harness: tmp_path / "home")
+
+    class Empty:
+        returncode = 0
+        stdout = "   \n"
+        stderr = ""
+
+    monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: Empty())
+    outdir = tmp_path / "out"
+    outdir.mkdir()
+    cfg = {"harness": "claude", "model": "claude-opus-5", "commit": "abc1234"}
+
+    assert runner.run_cell("c01", "implicit", 1, cfg, outdir, tmp_path / "wr").startswith("FAIL")
+    assert list(outdir.iterdir()) == []
+
+
+def test_a_quota_refusal_is_not_a_transcript(tmp_path, monkeypatch):
+    # The failure that actually happened: exit 0, non-empty stdout, and 47 of 65 Gate 2
+    # cells recorded "You've hit your session limit" as the model's answer.
+    import run as runner
+
+    work = tmp_path / "ws" / "workspace"
+    work.mkdir(parents=True)
+    (work / "prompt.md").write_text("ask")
+    monkeypatch.setattr(runner, "materialize", lambda case_id, dest: work)
+    monkeypatch.setattr(runner, "build_home", lambda root, install, harness: tmp_path / "home")
+
+    class Limited:
+        returncode = 0
+        stdout = "You've hit your session limit · resets 11:20am (Asia/Kolkata)\n"
+        stderr = ""
+
+    monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: Limited())
+    outdir = tmp_path / "out"
+    outdir.mkdir()
+    cfg = {"harness": "claude", "model": "claude-opus-5", "commit": "abc1234"}
+
+    status = runner.run_cell("c01", "implicit", 1, cfg, outdir, tmp_path / "wr")
+    assert status.startswith("FAIL") and "quota" in status
+    assert list(outdir.iterdir()) == []
+
+
+def test_a_terse_real_answer_is_not_mistaken_for_a_refusal():
+    # c07 and c08 are anti-triggers whose correct answer is one short line. A guard that
+    # flagged brevity would fail exactly the cases that are supposed to be brief.
+    assert runner_refusal("5432.") is None
+    assert runner_refusal("You've hit your session limit · resets 11:20am") is not None
+
+
+def runner_refusal(text):
+    from run import refusal_in
+
+    return refusal_in(text)
+
+
+def test_codex_run_is_reproducible_from_the_matrix_alone():
+    cmd = harness_cmd(CODEX_CFG, "ask", 1, "sid", Path("/w"), [])
+    assert "--ignore-user-config" in cmd, "the operator's config.toml would pick the model"
+    assert cmd[cmd.index("-m") + 1] == "gpt-5.6-sol"
+    assert "model_reasoning_effort='xhigh'" in cmd
+
+
+def test_codex_never_passes_disallowed_tools():
+    # Codex has no such flag; denial is whatever build_home declines to materialize.
+    assert "--disallowedTools" not in harness_cmd(CODEX_CFG, "ask", 1, "s", Path("/w"), ["Task"])
+
+
+def test_claude_still_threads_a_session_id():
+    cfg = {"harness": "claude", "model": "claude-opus-5"}
+    first = harness_cmd(cfg, "ask", 1, "sid", Path("/w"), ["Task"])
+    second = harness_cmd(cfg, "then", 2, "sid", Path("/w"), ["Task"])
+    assert first[first.index("--session-id") + 1] == "sid"
+    assert second[second.index("--resume") + 1] == "sid"
+    assert first[first.index("--disallowedTools") + 1] == "Task"
 
 
 def test_gate2_matrix_covers_every_case_in_the_suite():

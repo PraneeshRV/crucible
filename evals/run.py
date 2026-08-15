@@ -45,18 +45,54 @@ CONDITIONS = {
 }
 
 
+# A quota refusal arrives as a short, ordinary-looking answer on stdout with exit 0. On
+# 2026-08-15 that put "You've hit your session limit" into 47 of 65 Gate 2 transcripts,
+# every one of them recorded as a completed cell. Nothing about the exit status or the
+# output length distinguishes it from a terse correct answer, so it is matched by text.
+REFUSAL_SENTINELS = (
+    "hit your session limit",
+    "usage limit reached",
+    "rate limit",
+    "quota exceeded",
+)
+
+
+def refusal_in(response: str) -> str | None:
+    """The sentinel a harness refusal matched, or None for a real answer."""
+    low = response.lower()
+    return next((s for s in REFUSAL_SENTINELS if s in low), None)
+
+
 REAL_CREDENTIALS = Path.home() / ".claude" / ".credentials.json"
+REAL_CODEX_AUTH = Path.home() / ".codex" / "auth.json"
+# Codex re-materializes its six `.system` skills into any CODEX_HOME that lacks this marker
+# — the same baseline-lifting problem BUILTIN_SKILLS solves for claude. Pre-seeding it
+# leaves `.system` empty. Copied from the live CODEX_HOME rather than written from a
+# constant because the file holds a version hash: after a codex upgrade a hardcoded marker
+# would stop matching and the built-ins would silently come back.
+CODEX_SYSTEM_MARKER = Path.home() / ".codex" / "skills" / ".system" / ".codex-system-skills.marker"
 
 
-def build_home(root: Path, install_skill: bool, link_credentials: bool = False) -> Path:
-    """A disposable HOME. Empty means no user CLAUDE.md, no skills, no plugins, no hooks."""
+def build_home(root: Path, install_skill: bool, harness: str) -> Path:
+    """A disposable HOME. Empty means no user CLAUDE.md or AGENTS.md, no skills, no hooks."""
     home = root / ("home-skill" if install_skill else "home-bare")
     if home.exists():
         shutil.rmtree(home)
+
+    if harness == "codex":
+        skills = home / ".codex" / "skills"
+        (skills / ".system").mkdir(parents=True)
+        shutil.copy(CODEX_SYSTEM_MARKER, skills / ".system")
+        # Symlink, never copy — same rule as the claude credentials below.
+        (home / ".codex" / "auth.json").symlink_to(REAL_CODEX_AUTH)
+        if install_skill:
+            shutil.copytree(SKILL_SRC, skills / "crucible")
+        return home
+
     (home / ".claude" / "skills").mkdir(parents=True)
     if install_skill:
         shutil.copytree(SKILL_SRC, home / ".claude" / "skills" / "crucible")
-    if link_credentials:
+    if harness == "claude":
         # The `claude` harness authenticates from $HOME/.claude/.credentials.json, which a
         # disposable HOME does not have. Symlink, never copy: the token stays in one place
         # and no secret is written into an eval directory. Note that an eval session with
@@ -66,8 +102,10 @@ def build_home(root: Path, install_skill: bool, link_credentials: bool = False) 
     return home
 
 
-def harness_cmd(harness: str, model: str, prompt: str, session: list[str], deny: list[str]) -> list[str]:
+def harness_cmd(cfg: dict, prompt: str, turn: int, sid: str, work: Path, deny: list[str]) -> list[str]:
+    harness, model = cfg["harness"], cfg["model"]
     if harness in ("glm", "claude"):
+        session = ["--session-id", sid] if turn == 1 else ["--resume", sid]
         cmd = [harness, "-p", prompt, *session]
         # glm selects its model through the wrapper's env; claude needs the flag.
         if harness == "claude":
@@ -75,6 +113,23 @@ def harness_cmd(harness: str, model: str, prompt: str, session: list[str], deny:
         if deny:
             cmd += ["--disallowedTools", ",".join(deny)]
         return cmd
+    if harness == "codex":
+        # Turn 2 resumes with --last rather than by id. Every cell gets its own CODEX_HOME,
+        # so exactly one session is recorded there and --last has nothing to race against.
+        head = ["codex", "exec"] if turn == 1 else ["codex", "exec", "resume", "--last"]
+        # `resume` accepts neither --sandbox nor -C, so the sandbox goes through -c and the
+        # working directory is left to the subprocess cwd. Both turns then take identical
+        # options, which is also what keeps resume's own cwd filter pointing at the cell.
+        return head + [
+            # Without this the operator's config.toml supplies the model and the reasoning
+            # effort, and the run would not be reproducible from the matrix alone.
+            "--ignore-user-config",
+            "--skip-git-repo-check",  # a materialized workspace is not a git repo
+            "-m", model,
+            "-c", f"sandbox_mode={cfg.get('sandbox', 'workspace-write')!r}",
+            "-c", f"model_reasoning_effort={cfg.get('reasoning_effort', 'xhigh')!r}",
+            prompt,
+        ]
     raise ValueError(f"unsupported harness: {harness!r}")
 
 
@@ -90,7 +145,7 @@ def run_cell(case_id: str, condition: str, rep: int, cfg: dict, outdir: Path, wo
     work = materialize(case_id, ws)
     staged_turn2 = work.parent / "turn2.md"
 
-    home = build_home(ws, spec["install_skill"], link_credentials=cfg["harness"] == "claude")
+    home = build_home(ws, spec["install_skill"], harness=cfg["harness"])
     env = dict(os.environ)
     env["HOME"] = str(home)
     env.setdefault("ZAI_KEY_FILE", str(Path.home() / ".config" / "zai.key"))
@@ -99,10 +154,22 @@ def run_cell(case_id: str, condition: str, rep: int, cfg: dict, outdir: Path, wo
         # by the child and override the disposable HOME.
         for var in [k for k in env if k.startswith(("CLAUDE_", "ANTHROPIC_"))]:
             del env[var]
+    if cfg["harness"] == "codex":
+        # Codex reads CODEX_HOME, not $HOME/.codex, so setting HOME alone isolates nothing.
+        # The parent may also be running under the codex companion, whose CODEX_* variables
+        # would follow the child in.
+        for var in [k for k in env if k.startswith("CODEX_")]:
+            del env[var]
+        env["CODEX_HOME"] = str(home / ".codex")
 
-    deny = ["Task", "Agent"] + (
-        ["Skill"] if spec["deny_skill_tool"] else [f"Skill({s})" for s in BUILTIN_SKILLS]
-    )
+    if cfg["harness"] == "codex":
+        # Codex has no --disallowedTools. The bare arm is enforced by not installing the
+        # skill, and the built-ins by the marker in build_home, so nothing is denied by name.
+        deny = []
+    else:
+        deny = ["Task", "Agent"] + (
+            ["Skill"] if spec["deny_skill_tool"] else [f"Skill({s})" for s in BUILTIN_SKILLS]
+        )
 
     sid = str(uuid.uuid4())
     turns, elapsed = [], []
@@ -111,24 +178,46 @@ def run_cell(case_id: str, condition: str, rep: int, cfg: dict, outdir: Path, wo
             continue
         # The prefix marks the explicit condition and belongs on turn 1 only.
         prompt = (spec["prefix"] if n == 1 else "") + src.read_text()
-        session = ["--session-id", sid] if n == 1 else ["--resume", sid]
         started = time.monotonic()
         proc = subprocess.run(
-            harness_cmd(cfg["harness"], cfg["model"], prompt, session, deny),
+            harness_cmd(cfg, prompt, n, sid, work, deny),
             cwd=work, env=env, capture_output=True, text=True,
+            # Codex appends piped stdin to the prompt as a <stdin> block. Whatever the
+            # parent's stdin happens to be, it is not part of the case.
+            stdin=subprocess.DEVNULL,
         )
         elapsed.append(round(time.monotonic() - started, 1))
+        refusal = refusal_in(proc.stdout)
+        if refusal:
+            return f"FAIL {out.name} turn {n}: harness refused ({refusal}) — quota, not behaviour"
+        if proc.returncode != 0 or not proc.stdout.strip():
+            # Deliberately write nothing. The resume check treats any non-empty file as a
+            # finished cell, so recording the failure would make the rerun that is supposed
+            # to repair it skip the cell instead — and a harness error would be graded as
+            # behaviour. A missing file is retried; a bad one is not.
+            said = (proc.stderr or proc.stdout or "").strip().splitlines()
+            why = said[-1] if said else f"exit {proc.returncode}, no output"
+            return f"FAIL {out.name} turn {n}: {why}"
         # Record what was actually sent, not the source file. In the explicit condition
         # they differ by the `$crucible` prefix, and a transcript that hides the prefix
         # misrepresents the condition it was run under.
-        turns.append((prompt, proc.stdout or proc.stderr))
+        turns.append((prompt, proc.stdout))
 
     pins = {
         "case": case_id, "condition": condition, "rep": rep,
         "harness": cfg["harness"], "model": cfg["model"],
+        **({"sandbox": cfg.get("sandbox", "workspace-write"),
+            "reasoning_effort": cfg.get("reasoning_effort", "xhigh")}
+           if cfg["harness"] == "codex" else {}),
         "crucible_commit": cfg["commit"],
         "skill_installed": spec["install_skill"],
         "denied_tools": deny,
+        # How the harness's own bundled skills were kept out of the baseline. The two
+        # harnesses achieve it differently, and a transcript that did not say which was
+        # used could not be audited for a contaminated baseline.
+        "builtin_skills": (
+            "suppressed by .system marker" if cfg["harness"] == "codex" else "denied by name"
+        ),
         "global_instructions": "none (disposable HOME)",
         "run_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "seconds_per_turn": elapsed,
@@ -150,9 +239,17 @@ def main() -> None:
     ap.add_argument("--workroot", type=Path, default=Path("/tmp/crucible-evals"))
     ap.add_argument("--jobs", type=int, default=3,
                     help="concurrent cells; the Z.ai plan rate-limits above ~3")
+    # Gate 2 runs the same case plan on both harnesses. Overriding here rather than
+    # keeping a second matrix file means the two arms cannot drift apart in which cases,
+    # conditions and reps they ran.
+    ap.add_argument("--harness", help="override the matrix harness")
+    ap.add_argument("--model", help="override the matrix model")
     args = ap.parse_args()
 
     cfg = json.loads(args.matrix.read_text())
+    for key in ("harness", "model"):
+        if getattr(args, key):
+            cfg[key] = getattr(args, key)
     cfg["commit"] = subprocess.run(
         ["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"],
         capture_output=True, text=True,
@@ -171,11 +268,20 @@ def main() -> None:
         sys.exit(f"matrix names cases that do not exist: {sorted(set(missing))}")
 
     print(f"{len(cells)} cells, {cfg['harness']}/{cfg['model']}, crucible {cfg['commit']}")
+    results = []
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         futures = [pool.submit(run_cell, c, cond, r, cfg, args.outdir, args.workroot)
                    for c, cond, r in cells]
         for f in futures:
-            print(f.result(), flush=True)
+            results.append(f.result())
+            print(results[-1], flush=True)
+
+    # Exit non-zero on any failure. A partial matrix that reports success is how a gate
+    # gets graded on cells that never ran.
+    failed = [r for r in results if r.startswith("FAIL")]
+    if failed:
+        print(f"\n{len(failed)} of {len(cells)} cells failed; rerun the same command to retry them")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
