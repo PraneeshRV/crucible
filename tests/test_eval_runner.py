@@ -71,6 +71,32 @@ def test_anti_triggers_never_run_explicit():
 CODEX_CFG = {"harness": "codex", "model": "gpt-5.6-sol"}
 
 
+@pytest.mark.parametrize(
+    "minutes_from_now,expected",
+    [(480, 480), (-5, -5), (0.5, 0.5)],
+)
+def test_token_minutes_left_reads_the_expiry(tmp_path, minutes_from_now, expected):
+    import time as clock
+
+    from run import token_minutes_left
+
+    creds = tmp_path / ".credentials.json"
+    creds.write_text(json.dumps(
+        {"claudeAiOauth": {"expiresAt": int((clock.time() + minutes_from_now * 60) * 1000)}}))
+    assert token_minutes_left(creds) == pytest.approx(expected, abs=0.1)
+
+
+@pytest.mark.parametrize("body", ["{}", "not json", '{"claudeAiOauth": {}}'])
+def test_token_minutes_left_is_none_when_unreadable(tmp_path, body):
+    # An unreadable token must not block a glm or codex arm, which never touch it.
+    from run import token_minutes_left
+
+    creds = tmp_path / ".credentials.json"
+    creds.write_text(body)
+    assert token_minutes_left(creds) is None
+    assert token_minutes_left(tmp_path / "absent.json") is None
+
+
 @pytest.fixture
 def codex_host(tmp_path, monkeypatch):
     """Stand in for the operator's ~/.codex so these tests do not depend on this machine."""

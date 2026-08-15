@@ -82,6 +82,15 @@ REAL_CODEX_AUTH = Path.home() / ".codex" / "auth.json"
 CODEX_SYSTEM_MARKER = Path.home() / ".codex" / "skills" / ".system" / ".codex-system-skills.marker"
 
 
+def token_minutes_left(credentials: Path = REAL_CREDENTIALS) -> float | None:
+    """Minutes until the claude access token expires, or None if it cannot be read."""
+    try:
+        oauth = json.loads(credentials.read_text()).get("claudeAiOauth", {})
+        return (oauth["expiresAt"] / 1000 - time.time()) / 60
+    except (OSError, ValueError, KeyError):
+        return None
+
+
 def build_home(root: Path, install_skill: bool, harness: str) -> Path:
     """A disposable HOME. Empty means no user CLAUDE.md or AGENTS.md, no skills, no hooks."""
     home = root / ("home-skill" if install_skill else "home-bare")
@@ -253,6 +262,8 @@ def main() -> None:
     # conditions and reps they ran.
     ap.add_argument("--harness", help="override the matrix harness")
     ap.add_argument("--model", help="override the matrix model")
+    ap.add_argument("--min-token-minutes", type=float, default=60.0,
+                    help="refuse to start a claude arm inside this much of token expiry")
     args = ap.parse_args()
 
     cfg = json.loads(args.matrix.read_text())
@@ -275,6 +286,21 @@ def main() -> None:
     missing = [c for c, _, _ in cells if not (CASES / c).is_dir()]
     if missing:
         sys.exit(f"matrix names cases that do not exist: {sorted(set(missing))}")
+
+    # Every claude cell reads one symlinked credentials file. If the access token expires
+    # mid-arm they all refresh at once, and because refresh tokens rotate the first refresh
+    # invalidates the one the rest present — which revoked the login on 2026-08-15 and
+    # stopped Gate 2 at 18 of 65 cells. Refusing to start is enough; nothing here needs to
+    # implement refresh, it only needs to not race.
+    if cfg["harness"] == "claude":
+        left = token_minutes_left()
+        if left is not None and left < args.min_token_minutes:
+            sys.exit(
+                f"claude token expires in {left:.0f} min, under the {args.min_token_minutes:.0f} "
+                f"min floor. Refresh it first (`claude auth login`) — a concurrent arm that "
+                f"crosses expiry revokes the login."
+            )
+        print(f"claude token good for {left:.0f} min" if left else "claude token expiry unknown")
 
     print(f"{len(cells)} cells, {cfg['harness']}/{cfg['model']}, crucible {cfg['commit']}")
     results = []
