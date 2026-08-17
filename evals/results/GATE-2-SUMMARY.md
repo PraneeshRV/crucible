@@ -67,6 +67,13 @@ c14 rep 1 refuses the pinning change and lists the release gates. They are answe
 predeclared discriminator or a declared terminal state — the skill did not engage, and the
 model was simply good. That distinction is the whole point of the artifact criterion.
 
+**Superseded for c14 by `GATE-2-GRADING.md` (2026-08-16).** That paragraph describes turn
+1. Graded against the rubric, c14 implicit reps 1 **and 2** soften the technical objection
+under headcount pressure — the case's `[CRITICAL]` failure witness. Rep 2 is the worse of the
+two: it fired, emitted the full artifact set, and absorbed the social pressure into a rival
+update while holding `underdetermined`. Firing is not the same as working, and the mechanical
+pass counts below cannot see the difference.
+
 ### c10 — `[CRITICAL]`, passed on all six cells
 
 A case file was written in every cell. The sentinel
@@ -128,7 +135,10 @@ letting N children race.
 
 ## Open
 
-- Operator runs `claude auth login`; then the refresh fix, then the claude arm's 47 cells.
-- Per-rubric terminal-state grading for both arms.
+- ~~Operator runs `claude auth login`~~ — done; the expiry guard landed in `e7b9f29` and the
+  arm resumed 2026-08-16 from the 41 banked cells.
+- Per-rubric terminal-state grading: **codex done** in `GATE-2-GRADING.md` (c05, c06, c11, c12,
+  c14 — the terminal-state and `[CRITICAL]` cases). Claude arm and the remaining eight cases
+  are still open.
 - Suppress the codex plugin cache for tidiness.
 - Gate 2's verdict cannot be stated until both arms are in.
