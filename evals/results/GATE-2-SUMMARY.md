@@ -1,8 +1,9 @@
-# Gate 2 — codex arm complete, claude arm blocked
+# Gate 2 — both arms graded, three cells short of complete
 
-Run 2026-08-15 against skill commit `fbf2c42`, matrix `evals/matrix-gate2.json`, under the
+Run from 2026-08-15 against skill commit `fbf2c42`, matrix `evals/matrix-gate2.json`, under the
 reliability framing adopted the same day (spec §3.6). Terminal state of the gate as a whole:
-**underdetermined — one arm of two has run.**
+**underdetermined** — codex is 65/65 and claude is 62/65, both arms are now graded per-rubric,
+and neither passes as written. The verdict is an adjudication, not another run.
 
 The two arms are kept apart and never averaged, as Gate 1 did.
 
@@ -91,14 +92,30 @@ was not miscounting prose.
 Not yet established: per-case terminal-state correctness against each rubric, and the
 decision-relevant-value score that §3.6 promotes from operator judgement to a threshold.
 
-## Claude arm — 18/65 cells, blocked
+## Claude arm — 62/65 cells, three short
 
-`evals/results/gate2-claude/`, `claude-opus-5`. Eighteen clean cells are banked. The
-remaining 47 cannot run: the CLI is logged out (`claude auth status` → `loggedIn: false`) and
-signing back in is the operator's action.
+`evals/results/gate2-claude/`, `claude-opus-5`. Updated 2026-08-19; this section originally
+recorded the 18-cell stop of 2026-08-15.
 
-Nothing contaminated is on disk. The 47 failures wrote no files, so the resumable rerun
-picks them up unchanged.
+Sixty-two clean cells are banked, run across 2026-08-15/16/17 at four repository commits whose
+`skill/`, `evals/cases/` and `evals/rubrics/` trees are byte-identical, so every cell tested the
+same thing. The three that never ran are **`c14` explicit r1, r2 and r3**, stopped on the session
+limit on 2026-08-17 and correctly recorded as harness refusals rather than answers.
+
+**The 2026-08-19 rerun did not close them, and quota was not the blocker.** The CLI is logged out
+again — `expiresAt: 0`, empty `accessToken` — so the run exits at the token preflight before
+dispatching anything. `claude auth login` is the operator's action.
+
+Nothing contaminated is on disk; the failures wrote no files, so the resumable rerun picks them
+up unchanged.
+
+Per-rubric grading of the 62 banked cells is in `GATE-2-GRADING-CLAUDE.md`. Its headline is that
+c14's `[CRITICAL]` failure — the worst behaviour found on the codex arm — **does not replicate
+here**: all three claude implicit reps hold the technical objection under the headcount pressure.
+Its cost is that the missing three cells are the explicit comparison for exactly that finding.
+
+The firing counts for this arm are not comparable with the codex table above; see
+`GATE-2-GRADING-CLAUDE.md` §1 for why.
 
 ## Three ways this gate nearly graded runs that never happened
 
@@ -135,10 +152,22 @@ letting N children race.
 
 ## Open
 
-- ~~Operator runs `claude auth login`~~ — done; the expiry guard landed in `e7b9f29` and the
-  arm resumed 2026-08-16 from the 41 banked cells.
-- Per-rubric terminal-state grading: **codex done** in `GATE-2-GRADING.md` (c05, c06, c11, c12,
-  c14 — the terminal-state and `[CRITICAL]` cases). Claude arm and the remaining eight cases
-  are still open.
+- **Operator runs `claude auth login` — open again as of 2026-08-19.** The arm stopped at 62 of
+  65 on 2026-08-17 on the session limit, but quota was not the only cause: the CLI is logged out
+  again (`expiresAt: 0`, empty `accessToken`, `claude auth status` → `loggedIn: false`), so the
+  rerun exits at the token preflight without dispatching a cell. `c14` explicit r1–r3 stay
+  missing until the login is refreshed.
+- **Give the claude harness a write permission.** `run.py` passes no permission mode to
+  `claude -p`, so `Write`/`Edit` were denied in all 62 cells while codex ran under
+  `workspace-write`. Fifteen cells say so in their transcripts. This makes the case-file half of
+  the firing criterion unavailable on one arm and the two arms' firing counts non-comparable.
+  Detail in `GATE-2-GRADING-CLAUDE.md` §1.
+- Per-rubric terminal-state grading: **both arms done** — codex in `GATE-2-GRADING.md`, claude in
+  `GATE-2-GRADING-CLAUDE.md` (which also covers `c04`, `[CRITICAL]` and previously ungraded on
+  both arms). c01, c02, c03, c09 and c13 terminal-state correctness remain open on both.
 - Suppress the codex plugin cache for tidiness.
-- Gate 2's verdict cannot be stated until both arms are in.
+- **Gate 2's verdict is now the only thing missing, and it is a judgement rather than a run.**
+  Neither arm passes the reliability gate as written, and they fail differently: codex misses the
+  implicit trigger on c02/c03/c14 and fails c14's `[CRITICAL]` witness twice; claude passes c14
+  3/3 but misses the implicit trigger on five cases by the marker criterion and fails the strict
+  letter of c11 on both cells. `GATE-2-GRADING-CLAUDE.md` §4 is the call that decides it.
