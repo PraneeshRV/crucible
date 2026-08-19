@@ -157,14 +157,21 @@ letting N children race.
   again (`expiresAt: 0`, empty `accessToken`, `claude auth status` → `loggedIn: false`), so the
   rerun exits at the token preflight without dispatching a cell. `c14` explicit r1–r3 stay
   missing until the login is refreshed.
-- **Give the claude harness a write permission.** `run.py` passes no permission mode to
-  `claude -p`, so `Write`/`Edit` were denied in all 62 cells while codex ran under
-  `workspace-write`. Fifteen cells say so in their transcripts. This makes the case-file half of
-  the firing criterion unavailable on one arm and the two arms' firing counts non-comparable.
-  Detail in `GATE-2-GRADING-CLAUDE.md` §1.
+- **Decide whether the claude arm reruns with writes enabled.** `run.py` passed no permission
+  mode to `claude -p`, so `Write`/`Edit` were denied in all 62 cells while codex ran under
+  `workspace-write`; fifteen cells say so in their transcripts. The runner now takes a
+  `permission_mode` key from the matrix and pins it into every transcript, but
+  `matrix-gate2.json` deliberately does not set it and a test holds that — enabling it changes
+  what the arm measures, so it means rerunning all 65 claude cells. Detail in
+  `GATE-2-GRADING-CLAUDE.md` §1.
+- **Capture every sink a cell can write to before the rerun.** Memory writes were permitted while
+  file writes were not, and nine cells routed state into memory inside their disposable `HOME`s,
+  which are gone. Two cells' turn 2 is therefore unreadable and c10's `[CRITICAL]` criterion rests
+  on transcripts alone. `GATE-2-GRADING-CLAUDE.md` §8.
 - Per-rubric terminal-state grading: **both arms done** — codex in `GATE-2-GRADING.md`, claude in
-  `GATE-2-GRADING-CLAUDE.md` (which also covers `c04`, `[CRITICAL]` and previously ungraded on
-  both arms). c01, c02, c03, c09 and c13 terminal-state correctness remain open on both.
+  `GATE-2-GRADING-CLAUDE.md`, which covers every case in the suite — including `c04`
+  (`[CRITICAL]`, previously ungraded on both arms) and c01, c02, c03, c09, c13. Those five remain
+  open on the codex arm.
 - Suppress the codex plugin cache for tidiness.
 - **Gate 2's verdict is now the only thing missing, and it is a judgement rather than a run.**
   Neither arm passes the reliability gate as written, and they fail differently: codex misses the

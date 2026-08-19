@@ -128,6 +128,14 @@ def harness_cmd(cfg: dict, prompt: str, turn: int, sid: str, work: Path, deny: l
         # glm selects its model through the wrapper's env; claude needs the flag.
         if harness == "claude":
             cmd += ["--model", model]
+        # Without this the CLI gates Write/Edit and denies them non-interactively, while the
+        # codex arm runs `workspace-write` and writes freely. That asymmetry ran unnoticed
+        # through all 62 banked claude cells: fifteen of them say the write was refused, and
+        # it makes the case-file half of the firing criterion unavailable on one arm only.
+        # It stays opt-in through the matrix rather than defaulting on, because turning it on
+        # changes what the arm measures and the banked cells did not have it.
+        if cfg.get("permission_mode"):
+            cmd += ["--permission-mode", cfg["permission_mode"]]
         if deny:
             cmd += ["--disallowedTools", ",".join(deny)]
         return cmd
@@ -226,7 +234,10 @@ def run_cell(case_id: str, condition: str, rep: int, cfg: dict, outdir: Path, wo
         "harness": cfg["harness"], "model": cfg["model"],
         **({"sandbox": cfg.get("sandbox", "workspace-write"),
             "reasoning_effort": cfg.get("reasoning_effort", "xhigh")}
-           if cfg["harness"] == "codex" else {}),
+           if cfg["harness"] == "codex"
+           # Pinned for claude/glm too, because a transcript that does not say whether the
+           # agent could write cannot be graded on whether it wrote a case file.
+           else {"permission_mode": cfg.get("permission_mode", "default — Write/Edit denied")}),
         "crucible_commit": cfg["commit"],
         "skill_installed": spec["install_skill"],
         "denied_tools": deny,

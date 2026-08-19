@@ -286,3 +286,35 @@ def test_gate2_matrix_covers_every_case_in_the_suite():
     cfg = json.loads((REPO / "evals" / "matrix-gate2.json").read_text())
     on_disk = {p.name for p in (REPO / "evals" / "cases").iterdir() if p.is_dir()}
     assert on_disk == set(cfg["cases"]), "a case exists that Gate 2 would silently never run"
+
+
+def test_claude_write_permission_is_opt_in_through_the_matrix():
+    # The claude CLI gates Write/Edit and denies them non-interactively. Codex ran the same
+    # Gate 2 plan under `workspace-write`, so the two arms did not have equal write access and
+    # the case-file half of the firing criterion was unavailable on one of them. The knob
+    # exists so a rerun can be made symmetric — deliberately, from the matrix.
+    off = harness_cmd({"harness": "claude", "model": "claude-opus-5"}, "ask", 1, "s", Path("/w"), [])
+    assert "--permission-mode" not in off, "turning writes on silently would rewrite the arm"
+
+    on = harness_cmd(
+        {"harness": "claude", "model": "claude-opus-5", "permission_mode": "acceptEdits"},
+        "ask", 1, "s", Path("/w"), [],
+    )
+    assert on[on.index("--permission-mode") + 1] == "acceptEdits"
+
+
+def test_gate2_matrix_still_matches_the_banked_claude_cells():
+    # 62 of 65 claude cells are banked with Write/Edit denied. If the matrix starts asking for
+    # a permission mode, the three outstanding cells run under a regime the other 62 did not,
+    # and the arm can no longer be graded as one thing. Changing this is a decision, not a
+    # refactor: rerun the whole arm when it changes.
+    cfg = json.loads((REPO / "evals" / "matrix-gate2.json").read_text())
+    assert "permission_mode" not in cfg, "rerun all 65 claude cells before landing this"
+
+
+def test_transcripts_record_whether_the_agent_could_write():
+    # Grading the claude arm needed this and it was not there: no banked transcript says
+    # whether a missing case file means the agent declined to write one or could not.
+    import run as runner
+    src = Path(runner.__file__).read_text()
+    assert '"permission_mode"' in src
