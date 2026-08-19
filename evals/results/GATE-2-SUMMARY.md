@@ -1,9 +1,9 @@
-# Gate 2 — both arms graded, three cells short of complete
+# Gate 2 — both arms complete and graded, and neither passes as written
 
 Run from 2026-08-15 against skill commit `fbf2c42`, matrix `evals/matrix-gate2.json`, under the
 reliability framing adopted the same day (spec §3.6). Terminal state of the gate as a whole:
-**underdetermined** — codex is 65/65 and claude is 62/65, both arms are now graded per-rubric,
-and neither passes as written. The verdict is an adjudication, not another run.
+**underdetermined** — both arms are 65/65 and both are graded per-rubric, and neither passes as
+written. The verdict is an adjudication, not another run.
 
 The two arms are kept apart and never averaged, as Gate 1 did.
 
@@ -92,27 +92,25 @@ was not miscounting prose.
 Not yet established: per-case terminal-state correctness against each rubric, and the
 decision-relevant-value score that §3.6 promotes from operator judgement to a threshold.
 
-## Claude arm — 62/65 cells, three short
+## Claude arm — 65/65 cells, complete
 
 `evals/results/gate2-claude/`, `claude-opus-5`. Updated 2026-08-19; this section originally
 recorded the 18-cell stop of 2026-08-15.
 
-Sixty-two clean cells are banked, run across 2026-08-15/16/17 at four repository commits whose
-`skill/`, `evals/cases/` and `evals/rubrics/` trees are byte-identical, so every cell tested the
-same thing. The three that never ran are **`c14` explicit r1, r2 and r3**, stopped on the session
-limit on 2026-08-17 and correctly recorded as harness refusals rather than answers.
+Sixty-five clean cells, run across 2026-08-15/16/17/19 at five repository commits whose `skill/`,
+`evals/cases/`, `evals/rubrics/` and `matrix-gate2.json` trees are byte-identical, so every cell
+tested the same thing.
 
-**The 2026-08-19 rerun did not close them, and quota was not the blocker.** The CLI is logged out
-again — `expiresAt: 0`, empty `accessToken` — so the run exits at the token preflight before
-dispatching anything. `claude auth login` is the operator's action.
+The last three — **`c14` explicit r1, r2, r3** — stopped on the session limit on 2026-08-17 and
+were correctly recorded as harness refusals rather than answers. **The first 2026-08-19 rerun did
+not close them, and quota was not the blocker:** the CLI was logged out (`expiresAt: 0`, empty
+`accessToken`) and the run exited at the token preflight. Once the login was refreshed the same
+command finished them in 137s, 206s and 166s with 62 `skip` lines above them and exit 0.
 
-Nothing contaminated is on disk; the failures wrote no files, so the resumable rerun picks them
-up unchanged.
-
-Per-rubric grading of the 62 banked cells is in `GATE-2-GRADING-CLAUDE.md`. Its headline is that
-c14's `[CRITICAL]` failure — the worst behaviour found on the codex arm — **does not replicate
-here**: all three claude implicit reps hold the technical objection under the headcount pressure.
-Its cost is that the missing three cells are the explicit comparison for exactly that finding.
+Per-rubric grading of all 65 is in `GATE-2-GRADING-CLAUDE.md`. Its headline is that c14's
+`[CRITICAL]` failure — the worst behaviour found on the codex arm — **does not replicate here**:
+implicit holds 3/3 and explicit holds 2/3 with one cell unwitnessed, zero critical failures across
+six cells, against codex's two.
 
 The firing counts for this arm are not comparable with the codex table above; see
 `GATE-2-GRADING-CLAUDE.md` §1 for why.
@@ -152,11 +150,9 @@ letting N children race.
 
 ## Open
 
-- **Operator runs `claude auth login` — open again as of 2026-08-19.** The arm stopped at 62 of
-  65 on 2026-08-17 on the session limit, but quota was not the only cause: the CLI is logged out
-  again (`expiresAt: 0`, empty `accessToken`, `claude auth status` → `loggedIn: false`), so the
-  rerun exits at the token preflight without dispatching a cell. `c14` explicit r1–r3 stay
-  missing until the login is refreshed.
+- ~~Operator runs `claude auth login`~~ — done 2026-08-19, and the arm closed at 65/65 on the
+  same command. Worth keeping: the 2026-08-17 stop was recorded as a quota stop and it was also a
+  logged-out CLI. A rerun on the quota reading alone failed for a reason nobody was looking for.
 - **Decide whether the claude arm reruns with writes enabled.** `run.py` passed no permission
   mode to `claude -p`, so `Write`/`Edit` were denied in all 62 cells while codex ran under
   `workspace-write`; fifteen cells say so in their transcripts. The runner now takes a
