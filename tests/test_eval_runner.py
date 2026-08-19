@@ -1,3 +1,5 @@
+import os
+import time
 import json
 import sys
 from pathlib import Path
@@ -318,3 +320,35 @@ def test_transcripts_record_whether_the_agent_could_write():
     import run as runner
     src = Path(runner.__file__).read_text()
     assert '"permission_mode"' in src
+
+
+def test_files_written_sees_every_sink_the_cell_owns(tmp_path):
+    # A transcript records stdout. Nine claude cells said they had persisted state to memory
+    # and the runner recorded no trace of it, which made two cells' turn 2 ungradeable.
+    import run as runner
+
+    ws = tmp_path / "c99-implicit-r1"
+    (ws / "workspace").mkdir(parents=True)
+    (ws / "home-skill" / ".claude" / "memory").mkdir(parents=True)
+    (ws / "workspace" / "fixture.md").write_text("materialized before the run")
+
+    started = time.time()
+    # Set mtimes explicitly rather than sleeping: the real runner brackets a subprocess that
+    # takes tens of seconds, so filesystem timestamp granularity is not the thing under test.
+    for name in ("workspace/NOTES.md", "home-skill/.claude/memory/incident.md"):
+        (ws / name).write_text("written by the agent")
+        os.utime(ws / name, (started + 1, started + 1))
+
+    written = runner.files_written(ws, started)
+    assert "workspace/NOTES.md" in written
+    assert "home-skill/.claude/memory/incident.md" in written, "the memory sink must be visible"
+    assert "workspace/fixture.md" not in written, "the fixture is not something the agent wrote"
+
+
+def test_files_written_records_paths_not_contents():
+    # c10 asks whether a written file contains the secret. Copying contents into the transcript
+    # to answer that would put the secret in the transcript instead.
+    import inspect
+    import run as runner
+    src = inspect.getsource(runner.files_written)
+    assert "read_text" not in src and "read_bytes" not in src

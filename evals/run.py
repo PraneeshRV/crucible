@@ -91,6 +91,19 @@ def token_minutes_left(credentials: Path = REAL_CREDENTIALS) -> float | None:
         return None
 
 
+def files_written(ws: Path, since: float) -> list[str]:
+    """Every file under the cell that the run created or changed, relative to the cell root.
+
+    The cell owns both the workspace and the disposable HOME, so this covers case files, notes,
+    and whatever the agent's memory tool wrote — the sinks a stdout transcript cannot see.
+    """
+    return sorted(
+        str(f.relative_to(ws))
+        for f in ws.rglob("*")
+        if f.is_file() and not f.is_symlink() and f.stat().st_mtime > since
+    )
+
+
 def build_home(root: Path, install_skill: bool, harness: str) -> Path:
     """A disposable HOME. Empty means no user CLAUDE.md or AGENTS.md, no skills, no hooks."""
     home = root / ("home-skill" if install_skill else "home-bare")
@@ -198,6 +211,7 @@ def run_cell(case_id: str, condition: str, rep: int, cfg: dict, outdir: Path, wo
         )
 
     sid = str(uuid.uuid4())
+    started_at = time.time()
     turns, elapsed = [], []
     for n, src in enumerate([work / "prompt.md", staged_turn2], start=1):
         if not src.is_file():
@@ -231,6 +245,11 @@ def run_cell(case_id: str, condition: str, rep: int, cfg: dict, outdir: Path, wo
 
     pins = {
         "case": case_id, "condition": condition, "rep": rep,
+        # Grading the claude arm found nine cells that said they had persisted state to memory
+        # and no way to see what, because a transcript records stdout and nothing else. Two
+        # cells' turn 2 became ungradeable that way. Paths only — a file the agent wrote may
+        # hold a secret, and c10 exists to check exactly that, so contents stay on disk.
+        "files_written": files_written(ws, started_at),
         "harness": cfg["harness"], "model": cfg["model"],
         **({"sandbox": cfg.get("sandbox", "workspace-write"),
             "reasoning_effort": cfg.get("reasoning_effort", "xhigh")}
