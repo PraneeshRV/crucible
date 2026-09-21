@@ -4,8 +4,11 @@
 # A case the bare arm passes has no headroom and should not cost a Gate 2 matrix cell.
 set -euo pipefail
 
-CRUC=/home/praneesh/Praneesh/crucible
-SCRATCH=/tmp/claude-1000/-home-praneesh-Praneesh-2nd-brain/cd36447f-8769-4bbf-917d-804bfa14ead1/scratchpad/gate2-screen
+# Paths were parameterised after the fact, on 2026-09-21, when this repository was made
+# public. The recorded runs used the author's absolute paths; behaviour is unchanged.
+CRUC=${CRUC:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}
+SCRATCH=${SCRATCH:-${TMPDIR:-/tmp}/gate2-screen}
+ZAI_KEY_FILE=${ZAI_KEY_FILE:-$HOME/.config/zai.key}
 CLEAN_HOME="$SCRATCH/clean-home"
 case_id="$1"
 
@@ -20,7 +23,7 @@ OUT="$SCRATCH/$case_id-bare.md"
 SID=$(python -c 'import uuid;print(uuid.uuid4())')
 
 run() {
-  HOME="$CLEAN_HOME" ZAI_KEY_FILE=/home/praneesh/.config/zai.key \
+  HOME="$CLEAN_HOME" ZAI_KEY_FILE="$ZAI_KEY_FILE" \
     glm -p "$1" "${@:2}" --disallowedTools "Task,Agent,Skill"
 }
 
