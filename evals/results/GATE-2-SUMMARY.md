@@ -1,9 +1,10 @@
-# Gate 2 — both arms complete and graded, and neither passes as written
+# Gate 2 — both arms executed; grading and comparability remain open
 
 Run from 2026-08-15 against skill commit `fbf2c42`, matrix `evals/matrix-gate2.json`, under the
 reliability framing adopted the same day (spec §3.6). Terminal state of the gate as a whole:
-**underdetermined** — both arms are 65/65 and both are graded per-rubric, and neither passes as
-written. The verdict is an adjudication, not another run.
+**underdetermined** — both arms are 65/65, Claude is graded across the suite, and five Codex cases
+remain open. Neither arm passes the reliability gate as written. A cross-harness comparison is not
+valid because write permissions and captured output sinks differed.
 
 The two arms are kept apart and never averaged, as Gate 1 did.
 
@@ -164,13 +165,21 @@ letting N children race.
   file writes were not, and nine cells routed state into memory inside their disposable `HOME`s,
   which are gone. Two cells' turn 2 is therefore unreadable and c10's `[CRITICAL]` criterion rests
   on transcripts alone. `GATE-2-GRADING-CLAUDE.md` §8.
-- Per-rubric terminal-state grading: **both arms done** — codex in `GATE-2-GRADING.md`, claude in
-  `GATE-2-GRADING-CLAUDE.md`, which covers every case in the suite — including `c04`
-  (`[CRITICAL]`, previously ungraded on both arms) and c01, c02, c03, c09, c13. Those five remain
-  open on the codex arm.
+- Per-rubric terminal-state grading: Claude is complete in `GATE-2-GRADING-CLAUDE.md`. Codex is
+  graded in `GATE-2-GRADING.md` except for c01, c02, c03, c09 and c13.
 - Suppress the codex plugin cache for tidiness.
-- **Gate 2's verdict is now the only thing missing, and it is a judgement rather than a run.**
-  Neither arm passes the reliability gate as written, and they fail differently: codex misses the
-  implicit trigger on c02/c03/c14 and fails c14's `[CRITICAL]` witness twice; claude passes c14
-  3/3 but misses the implicit trigger on five cases by the marker criterion and fails the strict
-  letter of c11 on both cells. `GATE-2-GRADING-CLAUDE.md` §4 is the call that decides it.
+- **The c11 evidence standard is chosen, 2026-09-21: the adjudicated reading, carried in the
+  rubric text.** `evals/rubrics/c11.md` now requires an unhedged commitment on the mechanism of
+  permission and allows the write path to stay open only when the settling check is named, so
+  c11 grades 2/2 on the claude arm rather than failing the strict letter on both cells. The
+  over-refusal guard is consequently **unproven rather than passed** — the third adjudication in
+  the same direction after Gate 1's c03 and c06, with the behaviour it exists to catch never once
+  observed. `GATE-2-GRADING-CLAUDE.md` §4 carries the reasoning and the two things it does not
+  establish.
+- **What still keeps the gate at `underdetermined` is the implicit trigger, not c11.** Codex
+  misses it on c02/c03/c14 and fails c14's `[CRITICAL]` witness twice; claude passes c14 3/3 but
+  misses on five cases by the marker criterion. Neither arm passes the reliability gate as
+  written, and the cross-harness comparison cannot be repaired: the Codex subscription lapsed on
+  2026-08-28, so the five open Codex cases and any equal-permission rerun of that arm are
+  permanently unavailable. The release claim was therefore narrowed to explicit invocation on a
+  single harness rather than held open; see `README.md`.
